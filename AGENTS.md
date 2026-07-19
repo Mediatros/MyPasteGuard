@@ -50,3 +50,4 @@ Primary endpoints:
 - `src/masking/extractors/` contains provider-specific text extraction and insertion.
 - `src/logging/logger.ts` owns SQLite dashboard logging.
 - `docs/mint.json` registers API reference docs.
+- `integrations/claude-code/` contains the Claude Code hooks integration (standalone scripts, HTTP-only access to the engine via `/api/mask`, no imports from `src/`); see its README and `tsconfig.integrations.json`.

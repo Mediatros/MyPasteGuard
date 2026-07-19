@@ -11,9 +11,10 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "typecheck:benchmarks": "tsc --noEmit --project tsconfig.benchmarks.json",
-    "lint": "biome lint src benchmarks/pii-accuracy/*.ts",
-    "format": "biome format src benchmarks/pii-accuracy/*.ts --write",
-    "check": "biome check src benchmarks/pii-accuracy/*.ts",
+    "typecheck:integrations": "tsc --noEmit --project tsconfig.integrations.json",
+    "lint": "biome lint src benchmarks/pii-accuracy/*.ts integrations",
+    "format": "biome format src benchmarks/pii-accuracy/*.ts integrations --write",
+    "check": "biome check src benchmarks/pii-accuracy/*.ts integrations",
     "benchmark:accuracy": "bun run benchmarks/pii-accuracy/run.ts"
   },
   "dependencies": {

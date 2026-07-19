@@ -25,7 +25,7 @@ Moteur : PasteGuard local en mode moteur seul (`bun run start` + détecteur Dock
 
 ## Chemin critique et état
 
-Lots : 1 (environnement) → 2 (session store + client mask) → 3 (PostToolUse) → 4 (PreToolUse) → 5 (MessageDisplay) → 7 (E2E) → 8 (plugin). Lot 6 (UserPromptSubmit) : OPTIONNEL, décision utilisateur pendante. Lot 9 (MITM) : réserve non planifiée. État au 2026-07-07 : AUCUN lot exécuté, rien ne tourne. [read: from PROGRESS.md]
+Lots : 1 (environnement) → 2 (session store + client mask) → 3 (PostToolUse) → 4 (PreToolUse) → 5 (MessageDisplay) → 7 (E2E) → 8 (plugin). Lot 6 (UserPromptSubmit) : OPTIONNEL, décision utilisateur pendante. Lot 9 (MITM) : réserve non planifiée. État au 2026-07-19 : lots 1-4 TERMINÉS, masquage aller + démasquage des entrées locales prouvés en E2E abonnement ; gates V1/V2/V5/V6 levés, V7 levé pour resume. V2 : `updatedInput` SANS permissionDecision honoré (2.1.215), permissions préservées ; MAIS la validation old_string d'Edit se fait contre le disque AVANT PreToolUse → restauration old_string impossible, parade = consigne sed dans le CLAUDE.md du projet protégé. Les détails et faits prouvés (11-17 : contournement od/-c, bug poupée russe corrigé, attachments hook_success en clair local) sont dans PROGRESS.md, section « État actuel ». [read: from PROGRESS.md]
 
 Chaque lot a son plan avec objectif, spéc, tests, critères de succès : `plans/0N-*.md`. Exécuter dans l'ordre ; ne pas industrialiser avant d'avoir levé les gates du lot 3.
 
