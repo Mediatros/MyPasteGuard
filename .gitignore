@@ -39,3 +39,6 @@ coverage/
 test-*.ts
 test-*.sh
 test-*.js
+
+# Rapports E2E (peuvent contenir des valeurs de fixtures)
+integrations/claude-code/e2e/resultats/

@@ -39,4 +39,9 @@ services:
       target: detector
     ports:
       - "${PASTEGUARD_DETECTOR_PORT:-5002}:5002"
+    environment:
+      # Floor PERSON abaissé à 0.90 (2026-07-20) : le score s'érode par cumul
+      # (plusieurs personnes + formats hétérogènes dans un même document), et
+      # 0.95 ne laissait aucune marge — un vrai nom mesuré à 0.941 était raté.
+      DETECTOR_FLOOR_PERSON: "${DETECTOR_FLOOR_PERSON:-0.90}"
     restart: unless-stopped

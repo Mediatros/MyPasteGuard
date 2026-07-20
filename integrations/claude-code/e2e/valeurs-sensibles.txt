@@ -1,0 +1,21 @@
+# Généré par build-valeurs-sensibles.ts depuis fixtures/clients.txt, fixtures/env.fake — ne pas éditer à la main.
+# Une valeur par ligne, doublons retirés, lignes de moins de 6 caractères ignorées.
++33 7 98 76 54 32
+06 12 34 56 78
+12 rue des Lilas, 69003 Lyon
+192.168.42.117
+69003 Lyon
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U
+FR11123456782
+FR76 3000 6000 0112 3456 7890 189
+ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
+Jean Dupont
+jean.dupont@exemple-corp.fr
+Marie-Claire Beaumont
+Marie-Claire Beaumont (marie.beaumont@exemple-corp.fr)
+marie.beaumont@exemple-corp.fr
+postgres://appuser:S3cretPass!@db.internal.test:5432/prod
+s.connor@cyberdyne-test.com
+Sarah Connor
+sk-ant-api03-abcdef1234567890abcdef1234567890abcdef1234567890ab
+SuperMotDePasse2026!

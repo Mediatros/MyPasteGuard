@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { containsPlaceholders, restoreText } from "./restore";
+import { containsPlaceholders, restoreText, restoreTextTolerant } from "./restore";
 import { freshState } from "./types";
 
 function stateWith(mapping: Record<string, string>) {
@@ -51,5 +51,61 @@ describe("containsPlaceholders", () => {
   test("appels répétés stables (pas d'état de regex partagé)", () => {
     expect(containsPlaceholders("[[A_1]]")).toBe(true);
     expect(containsPlaceholders("[[A_1]]")).toBe(true);
+  });
+});
+
+describe("restoreTextTolerant", () => {
+  test("3 placeholders connus tous restaurés (U1)", () => {
+    const state = stateWith({
+      "[[PERSON_1]]": "Jean Dupont",
+      "[[EMAIL_ADDRESS_1]]": "jean@exemple.fr",
+      "[[PHONE_NUMBER_1]]": "0102030405",
+    });
+    expect(
+      restoreTextTolerant(state, "[[PERSON_1]], [[EMAIL_ADDRESS_1]], [[PHONE_NUMBER_1]]"),
+    ).toBe("Jean Dupont, jean@exemple.fr, 0102030405");
+  });
+
+  test("message vide inchangé (U5)", () => {
+    expect(restoreTextTolerant(freshState(), "")).toBe("");
+  });
+
+  test("placeholder coupé en fin de texte, jamais tronqué (U7)", () => {
+    const state = stateWith({ "[[PERSON_1]]": "Jean" });
+    expect(restoreTextTolerant(state, "Bonjour [[PER")).toBe("Bonjour [[PER");
+  });
+
+  test("placeholder bien formé restauré comme restoreText", () => {
+    const state = stateWith({ "[[PERSON_1]]": "Jean Dupont" });
+    expect(restoreTextTolerant(state, "Voici [[PERSON_1]]")).toBe("Voici Jean Dupont");
+  });
+
+  test("retour à la ligne inséré dans le nom", () => {
+    const state = stateWith({ "[[PERSON_1]]": "Jean" });
+    expect(restoreTextTolerant(state, "[[PERSON\n_1]]")).toBe("Jean");
+  });
+
+  test("espace en fin de nom", () => {
+    const state = stateWith({ "[[PERSON_1]]": "Jean" });
+    expect(restoreTextTolerant(state, "[[PERSON_1 ]]")).toBe("Jean");
+  });
+
+  test("backticks autour du nom", () => {
+    const state = stateWith({ "[[PERSON_1]]": "Jean" });
+    expect(restoreTextTolerant(state, "[[`PERSON_1`]]")).toBe("Jean");
+  });
+
+  test("espaces autour du nom", () => {
+    const state = stateWith({ "[[PERSON_1]]": "Jean" });
+    expect(restoreTextTolerant(state, "[[ PERSON_1 ]]")).toBe("Jean");
+  });
+
+  test("placeholder inconnu (même déformé) laissé intact", () => {
+    const state = stateWith({ "[[PERSON_1]]": "Jean" });
+    expect(restoreTextTolerant(state, "[[PERSON\n_9]]")).toBe("[[PERSON\n_9]]");
+  });
+
+  test("texte sans placeholder inchangé", () => {
+    expect(restoreTextTolerant(freshState(), "rien à restaurer")).toBe("rien à restaurer");
   });
 });

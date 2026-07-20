@@ -1,0 +1,327 @@
+cases:
+  # Dense multi-entity paragraphs (name + email + phone/IP + VAT/IBAN in the
+  # same block), the failure mode where PERSON confidence drops under the
+  # 0.95 floor even though the same names score 0.98-0.99 in isolation.
+  # Report-only (category: hard) until the floor is recalibrated on evidence.
+  # All names, domains, IPs, IBANs, and VAT numbers below are synthetic:
+  # invented names, example.com/exemple-corp.fr domains, documentation/private
+  # IP ranges, and IBAN/VAT numbers generated to pass their real checksums
+  # without corresponding to any real account.
+
+  - id: hard_dense_fr_client_sheet_compound_1
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Fiche client : Jean-Baptiste Moreau, agence de Rennes. Contact : jean-baptiste.moreau@exemple-corp.fr, tel +33 1 42 68 53 09. Derniere connexion depuis 192.0.2.14. Numero de TVA intracommunautaire FR57482910635."
+    expected:
+      - entity: PERSON
+        text: Jean-Baptiste Moreau
+        match: contains
+      - entity: LOCATION
+        text: Rennes
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: jean-baptiste.moreau@exemple-corp.fr
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 1 42 68 53 09
+        match: contains
+      - entity: IP_ADDRESS
+        text: 192.0.2.14
+        match: exact
+      - entity: VAT_CODE
+        text: FR57482910635
+        match: exact
+
+  - id: hard_dense_fr_client_sheet_compound_2
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Fiche client : Marie-Ange Fontaine, agence de Grenoble. Contact : marie-ange.fontaine@example.com, tel +33 6 07 15 22 84. Derniere connexion depuis 198.51.100.23. Numero de TVA intracommunautaire FR91501223341."
+    expected:
+      - entity: PERSON
+        text: Marie-Ange Fontaine
+        match: contains
+      - entity: LOCATION
+        text: Grenoble
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: marie-ange.fontaine@example.com
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 6 07 15 22 84
+        match: contains
+      - entity: IP_ADDRESS
+        text: 198.51.100.23
+        match: exact
+      - entity: VAT_CODE
+        text: FR91501223341
+        match: exact
+
+  - id: hard_dense_fr_directory_simple_1
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Extrait annuaire interne : Julien Marchand, poste de Nantes. Courriel julien.marchand@example.com, ligne directe +33 2 35 44 12 67, IP du poste 10.20.30.40, TVA du prestataire FR27611987652."
+    expected:
+      - entity: PERSON
+        text: Julien Marchand
+        match: contains
+      - entity: LOCATION
+        text: Nantes
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: julien.marchand@example.com
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 2 35 44 12 67
+        match: contains
+      - entity: IP_ADDRESS
+        text: 10.20.30.40
+        match: exact
+      - entity: VAT_CODE
+        text: FR27611987652
+        match: exact
+
+  - id: hard_dense_fr_directory_simple_2
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Extrait annuaire interne : Camille Girard, poste de Toulouse. Courriel camille.girard@exemple-corp.fr, ligne directe +33 4 78 22 41 63, IP du poste 172.20.5.9, TVA du prestataire FR07724456785."
+    expected:
+      - entity: PERSON
+        text: Camille Girard
+        match: contains
+      - entity: LOCATION
+        text: Toulouse
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: camille.girard@exemple-corp.fr
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 4 78 22 41 63
+        match: contains
+      - entity: IP_ADDRESS
+        text: 172.20.5.9
+        match: exact
+      - entity: VAT_CODE
+        text: FR07724456785
+        match: exact
+
+  - id: hard_dense_fr_support_ticket_compound
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Ticket support #4821 ouvert par Anne-Sophie Girard, site de Lyon. Coordonnees : anne-sophie.girard@example.com, +33 6 44 87 12 39. IBAN de remboursement FR9620041010050051234567812, IP source 203.0.113.45."
+    expected:
+      - entity: PERSON
+        text: Anne-Sophie Girard
+        match: contains
+      - entity: LOCATION
+        text: Lyon
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: anne-sophie.girard@example.com
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 6 44 87 12 39
+        match: contains
+      - entity: IBAN_CODE
+        text: FR9620041010050051234567812
+        match: exact
+      - entity: IP_ADDRESS
+        text: 203.0.113.45
+        match: exact
+
+  - id: hard_dense_fr_support_ticket_simple
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Ticket support #4822 ouvert par Nicolas Faure, site de Bordeaux. Coordonnees : nicolas.faure@example.com, +33 5 61 23 45 67. IBAN de remboursement FR3510096180340023456789145, IP source 198.51.100.200."
+    expected:
+      - entity: PERSON
+        text: Nicolas Faure
+        match: contains
+      - entity: LOCATION
+        text: Bordeaux
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: nicolas.faure@example.com
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 5 61 23 45 67
+        match: contains
+      - entity: IBAN_CODE
+        text: FR3510096180340023456789145
+        match: exact
+      - entity: IP_ADDRESS
+        text: 198.51.100.200
+        match: exact
+
+  - id: hard_dense_fr_meeting_notes_compound
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Compte-rendu de reunion : Pierre-Louis Dumont et Louis-Philippe Rousseau ont valide le dossier pour le site de Clermont-Ferrand. Contacts : pierre-louis.dumont@example.com et louis-philippe.rousseau@exemple-corp.fr, ligne du secretariat +33 7 89 12 34 56. Adresse IP du terminal de signature 192.168.50.12."
+    expected:
+      - entity: PERSON
+        text: Pierre-Louis Dumont
+        match: contains
+      - entity: PERSON
+        text: Louis-Philippe Rousseau
+        match: contains
+      - entity: LOCATION
+        text: Clermont-Ferrand
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: pierre-louis.dumont@example.com
+        match: exact
+      - entity: EMAIL_ADDRESS
+        text: louis-philippe.rousseau@exemple-corp.fr
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 7 89 12 34 56
+        match: contains
+      - entity: IP_ADDRESS
+        text: 192.168.50.12
+        match: exact
+
+  - id: hard_dense_fr_meeting_notes_mixed
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Compte-rendu de reunion : Jean-Michel Lefebvre a presente le dossier avec Thomas Blanchard pour l'agence de Strasbourg. Contacts : jean-michel.lefebvre@example.com et thomas.blanchard@exemple-corp.fr, standard +33 3 88 12 45 67. TVA du prestataire FR59835112236."
+    expected:
+      - entity: PERSON
+        text: Jean-Michel Lefebvre
+        match: contains
+      - entity: PERSON
+        text: Thomas Blanchard
+        match: contains
+      - entity: LOCATION
+        text: Strasbourg
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: jean-michel.lefebvre@example.com
+        match: exact
+      - entity: EMAIL_ADDRESS
+        text: thomas.blanchard@exemple-corp.fr
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 3 88 12 45 67
+        match: contains
+      - entity: VAT_CODE
+        text: FR59835112236
+        match: exact
+
+  - id: hard_dense_fr_client_sheet_simple
+    suite: hard
+    category: hard
+    split: test
+    language: fr
+    text: "Fiche client : Claire Dubois, agence de Nice. Contact : claire.dubois@example.com, tel +33 6 15 82 44 71. Derniere connexion depuis 10.77.14.6. Numero de TVA intracommunautaire FR28918675430."
+    expected:
+      - entity: PERSON
+        text: Claire Dubois
+        match: contains
+      - entity: LOCATION
+        text: Nice
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: claire.dubois@example.com
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +33 6 15 82 44 71
+        match: contains
+      - entity: IP_ADDRESS
+        text: 10.77.14.6
+        match: exact
+      - entity: VAT_CODE
+        text: FR28918675430
+        match: exact
+
+  - id: hard_dense_en_client_sheet_compound
+    suite: hard
+    category: hard
+    split: test
+    language: en
+    text: "Client record: Anne-Marie Whitfield, Manchester branch. Contact anne-marie.whitfield@example.com, phone +44 20 7946 0234. Last login from 192.0.2.201. VAT reference GB123456727 attached to the account."
+    expected:
+      - entity: PERSON
+        text: Anne-Marie Whitfield
+        match: contains
+      - entity: LOCATION
+        text: Manchester
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: anne-marie.whitfield@example.com
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +44 20 7946 0234
+        match: contains
+      - entity: IP_ADDRESS
+        text: 192.0.2.201
+        match: exact
+      - entity: VAT_CODE
+        text: GB123456727
+        match: exact
+
+  - id: hard_dense_en_directory_simple
+    suite: hard
+    category: hard
+    split: test
+    language: en
+    text: "Staff directory extract: Ryan Blackwood, Leeds desk. Email ryan.blackwood@example.com, direct line +44 161 496 0876, workstation IP 172.31.9.14, VAT on file GB234567106."
+    expected:
+      - entity: PERSON
+        text: Ryan Blackwood
+        match: contains
+      - entity: LOCATION
+        text: Leeds
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: ryan.blackwood@example.com
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +44 161 496 0876
+        match: contains
+      - entity: IP_ADDRESS
+        text: 172.31.9.14
+        match: exact
+      - entity: VAT_CODE
+        text: GB234567106
+        match: exact
+
+  - id: hard_dense_en_support_ticket_compound
+    suite: hard
+    category: hard
+    split: test
+    language: en
+    text: "Support ticket #7793 opened by Mary-Jane Whitmore, Bristol site. Contact mary-jane.whitmore@example.com, +44 7911 123456. Refund IBAN GB29NWBK60161331926819, source IP 198.51.100.77."
+    expected:
+      - entity: PERSON
+        text: Mary-Jane Whitmore
+        match: contains
+      - entity: LOCATION
+        text: Bristol
+        match: contains
+      - entity: EMAIL_ADDRESS
+        text: mary-jane.whitmore@example.com
+        match: exact
+      - entity: PHONE_NUMBER
+        text: +44 7911 123456
+        match: contains
+      - entity: IBAN_CODE
+        text: GB29NWBK60161331926819
+        match: exact
+      - entity: IP_ADDRESS
+        text: 198.51.100.77
+        match: exact

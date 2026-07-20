@@ -66,6 +66,16 @@ types exacts.
   les placeholders dans les entrées des outils locaux via `updatedInput` SANS
   `permissionDecision` (mode validé en V2 sur claude 2.1.215 : honoré, flux de permission
   préservé). Placeholder non résolu ou valeur non shell-safe pour Bash → deny.
+- `user-prompt-submit.ts` (UserPromptSubmit, sans matcher) : détecte les PII/secrets tapés
+  directement dans le prompt et avertit ou bloque avant l'envoi. Piloté par `PASTEGUARD_PROMPT_MODE`
+  (défaut `off`, non câblé) : `off` ne fait rien (aucun appel réseau) ; `warn` avertit via
+  `systemMessage` (types + nombre, jamais les valeurs) et laisse le prompt partir EN CLAIR quand
+  même (`UserPromptSubmit` ne permet pas de réécrire le prompt) ; `block` renvoie
+  `{"decision":"block","reason":"..."}` listant les types détectés. Renversement de D6 :
+  ce hook n'est PAS fail-closed, toute panne du moteur ou timeout (2 s réseau) → exit 0 sans
+  blocage ni avertissement, pour ne jamais rendre la session inutilisable. Échappatoire :
+  préfixer le prompt de `!pg-off` pour forcer l'envoi sans détection. N'écrit jamais dans le
+  session store (détection pure via `/api/mask` sans `startFrom`, sans passer par `maskText`).
 - `spy.ts` / `spy-suffix.ts` / `pre-poc.ts` : instrumentation de POC, jamais hors projet de test.
 
 ### Branchement dans un projet (test uniquement à ce stade, décision D9)
@@ -98,10 +108,24 @@ Dans le `.claude/settings.json` du projet à protéger (jamais dans `~/.claude/s
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 10,
+            "command": "PASTEGUARD_PROMPT_MODE=warn bun run /chemin/vers/pasteguard/integrations/claude-code/scripts/user-prompt-submit.ts"
+          }
+        ]
+      }
     ]
   }
 }
 ```
+
+`PASTEGUARD_PROMPT_MODE` vaut `off` par défaut (hook inactif) si la variable n'est pas définie ;
+la fixer à `warn` ou `block` selon la posture voulue.
 
 Ajouter aussi au `CLAUDE.md` du projet protégé la consigne modèle : placeholders opaques à
 recopier tels quels ; si un Edit échoue sur un `old_string` contenant `[[...]]`, utiliser
