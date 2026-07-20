@@ -1,12 +1,14 @@
 import type { MaskingConfig } from "../config";
 import type { PlaceholderContext } from "./context";
-import { createRestoreFormatter } from "./restore-policy";
+import { createRestoreFormatter, type RestoreFormatter } from "./restore-policy";
 import { flushMaskingBuffer, unmaskStreamChunk } from "./service";
 
 export interface StreamRestorerOptions {
   piiContext?: PlaceholderContext;
   secretsContext?: PlaceholderContext;
   config: MaskingConfig;
+  /** Overrides the config-derived formatter (e.g. JSON escaping for tool inputs) */
+  formatValue?: RestoreFormatter;
 }
 
 export class StreamRestorer {
@@ -15,7 +17,7 @@ export class StreamRestorer {
   private readonly formatValue: ((original: string) => string) | undefined;
 
   constructor(private readonly options: StreamRestorerOptions) {
-    this.formatValue = createRestoreFormatter(options.config);
+    this.formatValue = options.formatValue ?? createRestoreFormatter(options.config);
   }
 
   restoreChunk(text: string): string {

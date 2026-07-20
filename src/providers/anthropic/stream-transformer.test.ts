@@ -185,7 +185,9 @@ describe("createAnthropicUnmaskingStream", () => {
   test("handles message_stop event", async () => {
     const context = createMaskingContext();
 
-    const messageStop = createAnthropicEvent("message_stop", { type: "message_stop" });
+    const messageStop = createAnthropicEvent("message_stop", {
+      type: "message_stop",
+    });
     const source = createSSEStream([messageStop]);
 
     const unmaskedStream = createAnthropicUnmaskingStream(source, context, defaultConfig);
@@ -373,5 +375,142 @@ describe("createAnthropicUnmaskingStream", () => {
 
     expect(result).toContain("Jane");
     expect(result).toContain("How are you?");
+  });
+});
+
+describe("tool_use input unmasking (input_json_delta)", () => {
+  function createInputJsonDelta(partialJson: string, index = 1): string {
+    return createAnthropicEvent("content_block_delta", {
+      type: "content_block_delta",
+      index,
+      delta: { type: "input_json_delta", partial_json: partialJson },
+    });
+  }
+
+  function createBlockStop(index = 1): string {
+    return createAnthropicEvent("content_block_stop", {
+      type: "content_block_stop",
+      index,
+    });
+  }
+
+  test("restores placeholder in a single input_json_delta chunk", async () => {
+    const context = createMaskingContext();
+    context.mapping["[[PERSON_1]]"] = "Jean Dupont";
+
+    const chunks = [
+      createInputJsonDelta('{"old_string": "Contact [[PERSON_1]]"}'),
+      createBlockStop(),
+    ];
+    const source = createSSEStream(chunks);
+
+    const result = await consumeStream(
+      createAnthropicUnmaskingStream(source, context, defaultConfig),
+    );
+
+    expect(result).toContain("Contact Jean Dupont");
+    expect(result).not.toContain("[[PERSON_1]]");
+  });
+
+  test("restores placeholder split across input_json_delta chunks", async () => {
+    const context = createMaskingContext();
+    context.mapping["[[EMAIL_ADDRESS_1]]"] = "jean@example.com";
+
+    const chunks = [
+      createInputJsonDelta('{"command": "grep [[EMAIL_'),
+      createInputJsonDelta('ADDRESS_1]] file.txt"}'),
+      createBlockStop(),
+    ];
+    const source = createSSEStream(chunks);
+
+    const result = await consumeStream(
+      createAnthropicUnmaskingStream(source, context, defaultConfig),
+    );
+
+    // The restored value spans two SSE fragments: reassemble the tool input
+    const fragments = [...result.matchAll(/"partial_json":"((?:[^"\\]|\\.)*)"/g)].map((m) =>
+      JSON.parse(`"${m[1]}"`),
+    );
+    const input = JSON.parse(fragments.join("")) as { command: string };
+    expect(input.command).toBe("grep jean@example.com file.txt");
+    expect(result).not.toContain("[[EMAIL_ADDRESS_1]]");
+  });
+
+  test("JSON-escapes restored values inside tool input", async () => {
+    const context = createMaskingContext();
+    context.mapping["[[PERSON_1]]"] = 'Jean "JD" Dupont\nLigne 2';
+
+    const chunks = [createInputJsonDelta('{"text": "[[PERSON_1]]"}'), createBlockStop()];
+    const source = createSSEStream(chunks);
+
+    const result = await consumeStream(
+      createAnthropicUnmaskingStream(source, context, defaultConfig),
+    );
+
+    // Extract the emitted partial_json fragments and verify they concatenate to valid JSON
+    const fragments = [...result.matchAll(/"partial_json":"((?:[^"\\]|\\.)*)"/g)].map((m) =>
+      JSON.parse(`"${m[1]}"`),
+    );
+    const input = JSON.parse(fragments.join("")) as { text: string };
+    expect(input.text).toBe('Jean "JD" Dupont\nLigne 2');
+  });
+
+  test("flushes buffered input before content_block_stop", async () => {
+    const context = createMaskingContext();
+    context.mapping["[[PERSON_1]]"] = "Jean";
+
+    // Trailing "[[PERSON_1]]" is buffered as a potential partial placeholder
+    // if the closing chunk never arrives; the stop event must flush it first.
+    const chunks = [createInputJsonDelta('{"name": "[[PERSON_1'), createBlockStop()];
+    const source = createSSEStream(chunks);
+
+    const result = await consumeStream(
+      createAnthropicUnmaskingStream(source, context, defaultConfig),
+    );
+
+    const stopPos = result.indexOf('"content_block_stop"');
+    const flushPos = result.indexOf("[[PERSON_1");
+    expect(flushPos).toBeGreaterThan(-1);
+    expect(stopPos).toBeGreaterThan(flushPos);
+  });
+
+  test("does not apply markers to tool inputs even when show_markers is true", async () => {
+    const context = createMaskingContext();
+    context.mapping["[[PERSON_1]]"] = "Jean";
+
+    const chunks = [createInputJsonDelta('{"name": "[[PERSON_1]]"}'), createBlockStop()];
+    const source = createSSEStream(chunks);
+
+    const result = await consumeStream(
+      createAnthropicUnmaskingStream(source, context, markerConfig),
+    );
+
+    expect(result).toContain("Jean");
+    expect(result).not.toContain("[protected]");
+  });
+
+  test("keeps event lines paired with their data lines", async () => {
+    const context = createMaskingContext();
+    context.mapping["[[PERSON_1]]"] = "Jean";
+
+    const chunks = [
+      createTextDelta("Hello [[PERSON_1]]", 0),
+      createInputJsonDelta('{"name": "[[PERSON_1]]"}', 1),
+      createBlockStop(1),
+    ];
+    const source = createSSEStream(chunks);
+
+    const result = await consumeStream(
+      createAnthropicUnmaskingStream(source, context, defaultConfig),
+    );
+
+    // Every data line must be preceded by its matching event line
+    const lines = result.split("\n").filter((l) => l !== "");
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith("data: ")) {
+        const data = JSON.parse(lines[i].slice(6)) as { type: string };
+        expect(lines[i - 1]).toBe(`event: ${data.type}`);
+      }
+    }
   });
 });

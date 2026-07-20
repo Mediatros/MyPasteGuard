@@ -12,7 +12,12 @@ function createRequest(
   messages: AnthropicMessage[],
   system?: string | Array<{ type: "text"; text: string }>,
 ): AnthropicRequest {
-  return { model: "claude-3-sonnet-20240229", max_tokens: 1024, messages, system };
+  return {
+    model: "claude-3-sonnet-20240229",
+    max_tokens: 1024,
+    messages,
+    system,
+  };
 }
 
 describe("Anthropic Text Extractor", () => {
@@ -103,7 +108,14 @@ describe("Anthropic Text Extractor", () => {
           role: "user",
           content: [
             { type: "text", text: "Describe this image:" },
-            { type: "image", source: { type: "base64", media_type: "image/png", data: "abc123" } },
+            {
+              type: "image",
+              source: {
+                type: "base64",
+                media_type: "image/png",
+                data: "abc123",
+              },
+            },
             { type: "text", text: "Be detailed" },
           ],
         },
@@ -162,7 +174,13 @@ describe("Anthropic Text Extractor", () => {
       const request = createRequest([
         {
           role: "user",
-          content: [{ type: "tool_result", tool_use_id: "tool_123", content: "Tool output here" }],
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool_123",
+              content: "Tool output here",
+            },
+          ],
         },
       ]);
 
@@ -188,7 +206,14 @@ describe("Anthropic Text Extractor", () => {
               tool_use_id: "tool_123",
               content: [
                 { type: "text", text: "First text block" },
-                { type: "image", source: { type: "base64", media_type: "image/png", data: "abc" } },
+                {
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: "image/png",
+                    data: "abc",
+                  },
+                },
                 { type: "text", text: "Second text block" },
               ],
             },
@@ -261,7 +286,10 @@ describe("Anthropic Text Extractor", () => {
           role: "user",
           content: [
             { type: "text", text: "Look at this" },
-            { type: "image", source: { type: "base64", media_type: "image/png", data: "abc" } },
+            {
+              type: "image",
+              source: { type: "base64", media_type: "image/png", data: "abc" },
+            },
           ],
         },
       ]);
@@ -278,7 +306,12 @@ describe("Anthropic Text Extractor", () => {
           role: "assistant",
           content: [
             { type: "text", text: "Using a tool" },
-            { type: "tool_use", id: "tool_1", name: "calculator", input: { x: 5 } },
+            {
+              type: "tool_use",
+              id: "tool_1",
+              name: "calculator",
+              input: { x: 5 },
+            },
           ],
         },
       ]);
@@ -377,7 +410,10 @@ describe("Anthropic Text Extractor", () => {
           role: "user",
           content: [
             { type: "text", text: "Contact: john@example.com" },
-            { type: "image", source: { type: "base64", media_type: "image/png", data: "abc" } },
+            {
+              type: "image",
+              source: { type: "base64", media_type: "image/png", data: "abc" },
+            },
             { type: "text", text: "Phone: 555-1234" },
           ],
         },
@@ -399,7 +435,10 @@ describe("Anthropic Text Extractor", () => {
       ];
 
       const result = anthropicExtractor.applyMasked(request, maskedSpans);
-      const content = result.messages[0].content as Array<{ type: string; text?: string }>;
+      const content = result.messages[0].content as Array<{
+        type: string;
+        text?: string;
+      }>;
 
       expect(content[0].text).toBe("Contact: [[EMAIL_ADDRESS_1]]");
       expect(content[1].type).toBe("image"); // Unchanged
@@ -424,7 +463,10 @@ describe("Anthropic Text Extractor", () => {
       ];
 
       const result = anthropicExtractor.applyMasked(request, maskedSpans);
-      const content = result.messages[0].content as Array<{ type: string; thinking?: string }>;
+      const content = result.messages[0].content as Array<{
+        type: string;
+        thinking?: string;
+      }>;
 
       expect(content[0].thinking).toBe("User [[PERSON_1]] mentioned...");
     });
@@ -434,7 +476,11 @@ describe("Anthropic Text Extractor", () => {
         {
           role: "user",
           content: [
-            { type: "tool_result", tool_use_id: "tool_1", content: "Result for john@test.com" },
+            {
+              type: "tool_result",
+              tool_use_id: "tool_1",
+              content: "Result for john@test.com",
+            },
           ],
         },
       ]);
@@ -449,7 +495,10 @@ describe("Anthropic Text Extractor", () => {
       ];
 
       const result = anthropicExtractor.applyMasked(request, maskedSpans);
-      const content = result.messages[0].content as Array<{ type: string; content?: string }>;
+      const content = result.messages[0].content as Array<{
+        type: string;
+        content?: string;
+      }>;
 
       expect(content[0].content).toBe("Result for [[EMAIL_ADDRESS_1]]");
     });
@@ -466,7 +515,11 @@ describe("Anthropic Text Extractor", () => {
                 { type: "text", text: "Screenshot of john@test.com profile" },
                 {
                   type: "image",
-                  source: { type: "base64", media_type: "image/png", data: "abc123" },
+                  source: {
+                    type: "base64",
+                    media_type: "image/png",
+                    data: "abc123",
+                  },
                 },
                 { type: "text", text: "End of results" },
               ],
@@ -540,7 +593,12 @@ describe("Anthropic Text Extractor", () => {
       ]);
 
       const maskedSpans = [
-        { path: "messages[0].content", maskedText: "Masked", messageIndex: 0, partIndex: 0 },
+        {
+          path: "messages[0].content",
+          maskedText: "Masked",
+          messageIndex: 0,
+          partIndex: 0,
+        },
       ];
 
       const result = anthropicExtractor.applyMasked(request, maskedSpans);
@@ -580,7 +638,12 @@ describe("Anthropic Text Extractor", () => {
         id: "msg_123",
         type: "message",
         role: "assistant",
-        content: [{ type: "text", text: "Hello [[PERSON_1]], your email is [[EMAIL_ADDRESS_1]]" }],
+        content: [
+          {
+            type: "text",
+            text: "Hello [[PERSON_1]], your email is [[EMAIL_ADDRESS_1]]",
+          },
+        ],
         model: "claude-3-sonnet-20240229",
         stop_reason: "end_turn",
         stop_sequence: null,
@@ -667,7 +730,12 @@ describe("Anthropic Text Extractor", () => {
         role: "assistant",
         content: [
           { type: "text", text: "[[PERSON_1]]" },
-          { type: "tool_use", id: "tool_1", name: "calculator", input: { x: 5 } },
+          {
+            type: "tool_use",
+            id: "tool_1",
+            name: "calculator",
+            input: { x: 5 },
+          },
         ],
         model: "claude-3-sonnet-20240229",
         stop_reason: "end_turn",
@@ -685,6 +753,54 @@ describe("Anthropic Text Extractor", () => {
 
       expect((result.content[0] as { text: string }).text).toBe("Bob");
       expect(result.content[1].type).toBe("tool_use");
+    });
+
+    test("unmasks placeholders in tool_use input", () => {
+      const response: AnthropicResponse = {
+        id: "msg_123",
+        type: "message",
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "tool_1",
+            name: "edit_file",
+            input: {
+              path: "/tmp/contacts.txt",
+              old_string: "Contact: [[PERSON_1]]",
+              new_string: "Contact: [[PERSON_1]] <[[EMAIL_ADDRESS_1]]>",
+              flags: { dry_run: false, notes: ["cc [[EMAIL_ADDRESS_1]]"] },
+              count: 3,
+            },
+          },
+        ],
+        model: "claude-3-sonnet-20240229",
+        stop_reason: "tool_use",
+        stop_sequence: null,
+        usage: { input_tokens: 10, output_tokens: 5 },
+      };
+
+      const context: PlaceholderContext = {
+        mapping: {
+          "[[PERSON_1]]": "Jean Dupont",
+          "[[EMAIL_ADDRESS_1]]": "jean@example.com",
+        },
+        reverseMapping: {
+          "Jean Dupont": "[[PERSON_1]]",
+          "jean@example.com": "[[EMAIL_ADDRESS_1]]",
+        },
+        counters: { PERSON: 1, EMAIL_ADDRESS: 1 },
+      };
+
+      const result = anthropicExtractor.unmaskResponse(response, context);
+      const input = (result.content[0] as { input: Record<string, unknown> }).input;
+
+      expect(input.old_string).toBe("Contact: Jean Dupont");
+      expect(input.new_string).toBe("Contact: Jean Dupont <jean@example.com>");
+      expect((input.flags as { notes: string[] }).notes[0]).toBe("cc jean@example.com");
+      expect((input.flags as { dry_run: boolean }).dry_run).toBe(false);
+      expect(input.count).toBe(3);
+      expect(input.path).toBe("/tmp/contacts.txt");
     });
 
     test("preserves response structure", () => {

@@ -24,47 +24,58 @@ export type AnthropicResult =
       model: string;
     };
 
-/**
- * Client headers forwarded from the request
- */
-export interface AnthropicClientHeaders {
-  apiKey?: string;
-  authorization?: string;
-  beta?: string;
-}
+// Hop-by-hop headers and headers recomputed by fetch - never forwarded upstream
+const EXCLUDED_HEADERS = new Set([
+  "host",
+  "content-length",
+  "connection",
+  "keep-alive",
+  "transfer-encoding",
+  "upgrade",
+  "te",
+  "trailer",
+  "proxy-authorization",
+  "proxy-connection",
+  "accept-encoding",
+]);
 
 /**
  * Call Anthropic Messages API
  *
- * Transparent header forwarding - all auth headers from client are passed through.
+ * Transparent header forwarding - all client headers are passed through unchanged
+ * (User-Agent, x-stainless-*, anthropic-beta, auth) so the upstream sees the
+ * original client identity. Only hop-by-hop headers are dropped.
  * Config api_key is only used as fallback when no client auth headers present.
  */
 export async function callAnthropic(
   request: AnthropicRequest,
   config: AnthropicProviderConfig,
-  clientHeaders?: AnthropicClientHeaders,
+  clientHeaders?: Record<string, string>,
 ): Promise<AnthropicResult> {
   const isStreaming = request.stream ?? false;
   const baseUrl = (config.base_url || DEFAULT_ANTHROPIC_URL).replace(/\/$/, "");
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "anthropic-version": ANTHROPIC_VERSION,
-  };
+  const headers: Record<string, string> = {};
 
-  // Transparent auth forwarding - client headers take priority
-  if (clientHeaders?.apiKey) {
-    headers["x-api-key"] = clientHeaders.apiKey;
-  } else if (clientHeaders?.authorization) {
-    headers.Authorization = clientHeaders.authorization;
-  } else if (config.api_key) {
-    // Fallback to config only if no client auth
-    headers["x-api-key"] = config.api_key;
+  if (clientHeaders) {
+    for (const [name, value] of Object.entries(clientHeaders)) {
+      const lowerName = name.toLowerCase();
+      if (!EXCLUDED_HEADERS.has(lowerName)) {
+        headers[lowerName] = value;
+      }
+    }
   }
 
-  // Forward client's beta header unchanged
-  if (clientHeaders?.beta) {
-    headers["anthropic-beta"] = clientHeaders.beta;
+  // Body is re-serialized, so content-type is always set by the proxy
+  headers["content-type"] = "application/json";
+
+  if (!headers["anthropic-version"]) {
+    headers["anthropic-version"] = ANTHROPIC_VERSION;
+  }
+
+  // Fallback to config api_key only if no client auth
+  if (!headers["x-api-key"] && !headers.authorization && config.api_key) {
+    headers["x-api-key"] = config.api_key;
   }
 
   const timeoutMs = getConfig().server.request_timeout * 1000;
@@ -86,13 +97,19 @@ export async function callAnthropic(
     return { response: response.body, isStreaming: true, model: request.model };
   }
 
-  return { response: await response.json(), isStreaming: false, model: request.model };
+  return {
+    response: await response.json(),
+    isStreaming: false,
+    model: request.model,
+  };
 }
 
 /**
  * Get Anthropic provider info for /info endpoint
  */
-export function getAnthropicInfo(config: AnthropicProviderConfig): { baseUrl: string } {
+export function getAnthropicInfo(config: AnthropicProviderConfig): {
+  baseUrl: string;
+} {
   return {
     baseUrl: config.base_url || DEFAULT_ANTHROPIC_URL,
   };

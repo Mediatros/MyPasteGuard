@@ -317,11 +317,7 @@ async function sendToAnthropic(c: Context, request: AnthropicRequest, opts: Send
     toSecretsHeaderData(secretsResult),
   );
 
-  const clientHeaders = {
-    apiKey: c.req.header("x-api-key"),
-    authorization: c.req.header("Authorization"),
-    beta: c.req.header("anthropic-beta"),
-  };
+  const clientHeaders = c.req.header();
 
   try {
     const result = await callAnthropic(request, config.providers.anthropic!, clientHeaders);

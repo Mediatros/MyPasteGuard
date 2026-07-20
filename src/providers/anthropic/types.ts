@@ -60,12 +60,21 @@ export const ToolResultBlockSchema = z
   .object({
     type: z.literal("tool_result"),
     tool_use_id: z.string(),
-    content: z.union([z.string(), z.array(z.any())]),
+    content: z.union([z.string(), z.array(z.any())]).optional(),
     is_error: z.boolean().optional(),
   })
   .passthrough();
 
-export const ContentBlockSchema = z.discriminatedUnion("type", [
+// Fallback for content block types this proxy does not inspect (e.g. document,
+// search_result, server_tool_use). They pass through unmodified instead of
+// being rejected with a 400, so new Anthropic block types keep working.
+export const UnknownBlockSchema = z
+  .object({
+    type: z.string(),
+  })
+  .passthrough();
+
+const KnownContentBlockSchema = z.discriminatedUnion("type", [
   TextBlockSchema,
   ImageBlockSchema,
   ToolUseBlockSchema,
@@ -74,10 +83,14 @@ export const ContentBlockSchema = z.discriminatedUnion("type", [
   RedactedThinkingBlockSchema,
 ]);
 
+export const ContentBlockSchema = z.union([KnownContentBlockSchema, UnknownBlockSchema]);
+
 // Message and request types
+// Role left open: Claude Code sends "system" messages, and future roles must
+// be forwarded, not rejected (upstream reports invalid roles itself)
 export const AnthropicMessageSchema = z
   .object({
-    role: z.enum(["user", "assistant"]),
+    role: z.string(),
     content: z.union([z.string(), z.array(ContentBlockSchema)]),
   })
   .passthrough();
@@ -86,13 +99,15 @@ export const ToolSchema = z
   .object({
     name: z.string(),
     description: z.string().optional(),
+    // Optional: server tools (e.g. web_search) have no input_schema
     input_schema: z
       .object({
         type: z.literal("object"),
         properties: z.record(z.unknown()).optional(),
         required: z.array(z.string()).optional(),
       })
-      .passthrough(),
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
@@ -103,9 +118,10 @@ export const AnthropicRequestSchema = z
     max_tokens: z.number(),
     system: z.union([z.string(), z.array(ContentBlockSchema)]).optional(),
     tools: z.array(ToolSchema).optional(),
+    // type left open (auto/any/tool/none/...) so new values are not rejected
     tool_choice: z
       .object({
-        type: z.enum(["auto", "any", "tool"]),
+        type: z.string(),
         name: z.string().optional(),
       })
       .passthrough()

@@ -18,6 +18,7 @@ import type {
   TextBlock,
   ThinkingBlock,
   ToolResultBlock,
+  ToolUseBlock,
 } from "../../providers/anthropic/types";
 import type { MaskedSpan, RequestExtractor, TextSpan } from "../types";
 
@@ -266,11 +267,35 @@ export const anthropicExtractor: RequestExtractor<AnthropicRequest, AnthropicRes
       return result;
     };
 
+    // Tool inputs are structured values: unmask every string, including nested ones,
+    // so placeholders never leak into tool calls (file edits, commands, etc.)
+    const unmaskValue = (value: unknown): unknown => {
+      if (typeof value === "string") {
+        return unmaskText(value);
+      }
+      if (Array.isArray(value)) {
+        return value.map(unmaskValue);
+      }
+      if (value && typeof value === "object") {
+        return Object.fromEntries(
+          Object.entries(value).map(([key, nested]) => [key, unmaskValue(nested)]),
+        );
+      }
+      return value;
+    };
+
     return {
       ...response,
       content: response.content.map((block) => {
         if (block.type === "text") {
           return { ...block, text: unmaskText((block as TextBlock).text) };
+        }
+        if (block.type === "tool_use") {
+          const toolUse = block as ToolUseBlock;
+          return {
+            ...block,
+            input: unmaskValue(toolUse.input) as Record<string, unknown>,
+          };
         }
         return block;
       }),
