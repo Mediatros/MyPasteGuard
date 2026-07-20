@@ -49,6 +49,24 @@ describe("POST /anthropic/v1/messages", () => {
     expect(result.success).toBe(true);
   });
 
+  test("accepts Claude Code system role messages", () => {
+    const result = AnthropicRequestSchema.safeParse({
+      model: "claude-opus-4-8",
+      max_tokens: 64000,
+      stream: true,
+      system: [{ type: "text", text: "Default system prompt" }],
+      messages: [
+        { role: "user", content: [{ type: "text", text: "Hello" }] },
+        { role: "system", content: "Tool context reminder" },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.messages[1].role).toBe("system");
+    }
+  });
+
   test("returns 400 for missing model", async () => {
     const res = await app.request("/anthropic/v1/messages", {
       method: "POST",
