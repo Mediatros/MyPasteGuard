@@ -1,31 +1,32 @@
 /**
- * Hook UserPromptSubmit : détecte les PII/secrets tapés directement dans le
- * prompt et avertit (mode warn) ou bloque (mode block) avant l'envoi.
- * Piloté par la variable d'env `PASTEGUARD_PROMPT_MODE` (défaut "off").
+ * UserPromptSubmit hook: detects PII/secrets typed directly into the prompt
+ * and warns (warn mode) or blocks (block mode) before it is sent.
+ * Controlled by the `PASTEGUARD_PROMPT_MODE` env var (default "off").
  *
- * RENVERSEMENT DE POLITIQUE (à l'inverse de D6, cf. post-tool-use.ts) : ce
- * hook n'est PAS fail-closed. Une panne du moteur (down, timeout, payload
- * imprévu) ne doit JAMAIS rendre la session inutilisable en empêchant
- * l'utilisateur de parler à Claude Code : toute erreur → exit 0 SANS
- * blocage ET SANS avertissement. Ce canal reste "best effort" par nature :
- * l'utilisateur maîtrise ce qu'il tape, contrairement aux sorties d'outils.
+ * POLICY REVERSAL (opposite of D6, cf. post-tool-use.ts): this hook is NOT
+ * fail-closed. An engine outage (down, timeout, unexpected payload) must
+ * NEVER make the session unusable by preventing the user from talking to
+ * Claude Code: any error → exit 0 with NO blocking AND NO warning. This
+ * channel remains "best effort" by nature: the user controls what they
+ * type, unlike tool outputs.
  *
- * Ce hook ne réécrit JAMAIS le prompt : `UserPromptSubmit` ne le permet pas
- * (doc officielle ; pas de champ `updatedPrompt`). En mode warn, le prompt
- * part donc EN CLAIR quoi qu'il arrive ; l'avertissement est pédagogique.
+ * This hook NEVER rewrites the prompt: `UserPromptSubmit` doesn't allow it
+ * (official docs; no `updatedPrompt` field). In warn mode, the prompt is
+ * therefore sent IN THE CLEAR regardless; the warning is educational.
  *
- * Aucune écriture dans le session store : le prompt n'est jamais masqué ici
- * (bloqué = jamais parti, autorisé = parti en clair), donc `/api/mask` est
- * appelé directement (fetch nu), SANS passer par `maskText` de
- * `lib/mask-client.ts` qui charge/écrit l'état de session sous verrou — un
- * mapping créé pour ce texte polluerait les compteurs pour rien.
+ * No write to the session store: the prompt is never masked here (blocked =
+ * never sent, allowed = sent in the clear), so `/api/mask` is called
+ * directly (bare fetch), WITHOUT going through `maskText` from
+ * `lib/mask-client.ts`, which loads/writes session state under a lock: a
+ * mapping created for this text would pollute the counters for nothing.
  *
- * Jamais de valeur détectée affichée : seuls les TYPES et leur nombre
- * apparaissent dans l'avertissement ou la raison de blocage.
+ * Never display a detected value: only TYPES and their count appear in the
+ * warning or the block reason.
  *
- * stdout = UNIQUEMENT le JSON de réponse du hook (règle R12). Diagnostics
- * sur stderr.
+ * stdout = ONLY the hook response JSON (rule R12). Diagnostics on stderr.
  */
+
+import { shouldRunHooks } from "../lib/auth-mode";
 
 export type PromptMode = "off" | "warn" | "block";
 
@@ -34,7 +35,7 @@ export type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 const DEFAULT_URL = "http://localhost:3333";
 const NETWORK_TIMEOUT_MS = 2_000;
 
-/** Préfixe d'échappatoire : force l'envoi du prompt sans détection (reste dans le texte, inoffensif). */
+/** Escape-hatch prefix: forces the prompt to be sent without detection (stays in the text, harmless). */
 const BYPASS_PREFIX = "!pg-off";
 
 interface HookPayload {
@@ -67,14 +68,14 @@ export type HookOutcome =
   | { kind: "warn"; systemMessage: string }
   | { kind: "block"; reason: string };
 
-/** Lit PASTEGUARD_PROMPT_MODE ; toute valeur inconnue retombe sur "off" (défaut sûr). */
+/** Reads PASTEGUARD_PROMPT_MODE; any unknown value falls back to "off" (safe default). */
 export function readPromptMode(env: Record<string, string | undefined> = process.env): PromptMode {
   const raw = env.PASTEGUARD_PROMPT_MODE;
   if (raw === "warn" || raw === "block") return raw;
   return "off";
 }
 
-/** Résumé des entités détectées : types uniques (ordre de première apparition) + total. */
+/** Summary of detected entities: unique types (order of first appearance) + total. */
 export function summarizeEntities(entities: MaskApiEntity[]): EntitySummary {
   const types: string[] = [];
   for (const entity of entities) {
@@ -83,28 +84,28 @@ export function summarizeEntities(entities: MaskApiEntity[]): EntitySummary {
   return { types, total: entities.length };
 }
 
-/** Avertissement (mode warn) : jamais de valeur, uniquement types + nombre. */
+/** Warning (warn mode): never a value, only types + count. */
 export function buildWarningMessage(summary: EntitySummary): string {
-  const plural = summary.total > 1 ? "s" : "";
+  const entity = summary.total > 1 ? "entities" : "entity";
   return (
-    `PasteGuard : votre prompt contient ${summary.total} entité${plural} sensible${plural} ` +
-    `(${summary.types.join(", ")}). Le texte que vous tapez part EN CLAIR, il n'est pas masqué.`
+    `PasteGuard: your prompt contains ${summary.total} sensitive ${entity} ` +
+    `(${summary.types.join(", ")}). The text you type is sent IN THE CLEAR, it is not masked.`
   );
 }
 
-/** Raison de blocage (mode block) : jamais de valeur, types + porte de sortie. */
+/** Block reason (block mode): never a value, types + escape hatch. */
 export function buildBlockReason(summary: EntitySummary): string {
   return (
-    `PasteGuard : le prompt contient ${summary.types.join(", ")}. Reformuler sans la valeur, ` +
-    "ou la mettre dans un fichier et référencer le fichier (son contenu sera masqué). " +
-    `Pour forcer l'envoi malgré tout : préfixer le prompt de ${BYPASS_PREFIX}.`
+    `PasteGuard: the prompt contains ${summary.types.join(", ")}. Rephrase without the value, ` +
+    "or put it in a file and reference the file (its content will be masked). " +
+    `To force sending anyway: prefix the prompt with ${BYPASS_PREFIX}.`
   );
 }
 
 /**
- * Analyse le prompt selon le mode. Ne lève jamais : toute erreur réseau, de
- * statut HTTP ou de payload retombe sur `{ kind: "none" }` (renversement D6
- * documenté en tête de fichier).
+ * Analyzes the prompt according to the mode. Never throws: any network,
+ * HTTP status, or payload error falls back to `{ kind: "none" }` (D6
+ * reversal documented at the top of the file).
  */
 export async function analysePrompt(
   mode: PromptMode,
@@ -147,6 +148,8 @@ async function main(): Promise<void> {
     if (mode === "off") process.exit(0);
 
     const payload = JSON.parse(await Bun.stdin.text()) as HookPayload;
+    if (!(await shouldRunHooks())) process.exit(0);
+
     const outcome = await analysePrompt(mode, payload.prompt);
 
     if (outcome.kind === "none") process.exit(0);
@@ -157,8 +160,8 @@ async function main(): Promise<void> {
     console.log(JSON.stringify({ decision: "block", reason: outcome.reason }));
     process.exit(0);
   } catch (err) {
-    // Renversement D6 : stdin invalide, moteur down, timeout, payload
-    // imprévu → exit 0 SANS blocage et SANS avertissement.
+    // D6 reversal: invalid stdin, engine down, timeout, unexpected payload
+    // → exit 0 with NO blocking and NO warning.
     if (err instanceof Error) console.error(err.message);
     process.exit(0);
   }

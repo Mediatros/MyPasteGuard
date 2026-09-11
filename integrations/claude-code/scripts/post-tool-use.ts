@@ -1,21 +1,22 @@
 /**
- * Hook PostToolUse : masque les PII/secrets des sorties d'outils AVANT leur
- * entrée dans le contexte (lot 3 phase B). Politique D6 : fail-closed, jamais
- * laisser passer une sortie brute en cas d'échec du masquage.
- * stdout = UNIQUEMENT le JSON de réponse du hook (règle R12).
+ * PostToolUse hook: masks PII/secrets in tool outputs BEFORE they enter the
+ * context (batch 3 phase B). Policy D6: fail-closed, never let a raw output
+ * through if masking fails.
+ * stdout = ONLY the hook response JSON (rule R12).
  */
+import { shouldRunHooks } from "../lib/auth-mode";
 import { maskText } from "../lib/mask-client";
 import { totalTextLength, transformToolResponse } from "../lib/tool-output";
 
-/** Au-delà de ce volume, GLiNER est trop lent (~0,6 s/Ko, mesure lot 1) : secrets seuls. */
+/** Above this volume, GLiNER is too slow (~0.6s/KB, measured in batch 1): secrets only. */
 const PII_SCAN_CAP_CHARS = 30_000;
 
 const RETENTION_MESSAGE =
-  "[PasteGuard indisponible : la sortie de l'outil a été retenue par sécurité. " +
-  "Démarrer PasteGuard (bun run start) puis relancer l'outil.]";
+  "[PasteGuard unavailable: the tool output was withheld for safety. " +
+  "Start PasteGuard (bun run start) then rerun the tool.]";
 
 const BIG_OUTPUT_NOTE =
-  "[PasteGuard : sortie volumineuse, masquage PII désactivé sur cette sortie, secrets masqués]\n";
+  "[PasteGuard: large output, PII masking disabled for this output, secrets masked]\n";
 
 interface HookPayload {
   session_id?: string;
@@ -23,7 +24,7 @@ interface HookPayload {
   tool_response?: unknown;
 }
 
-/** Outils sans contenu sensible exploitable : ne pas payer le coût du masquage. */
+/** Tools with no exploitable sensitive content: don't pay the masking cost. */
 const SKIP_TOOLS = new Set(["TodoWrite", "AskUserQuestion", "ToolSearch", "ExitPlanMode"]);
 
 function emit(updatedToolOutput: unknown, systemMessage?: string): void {
@@ -36,19 +37,21 @@ function emit(updatedToolOutput: unknown, systemMessage?: string): void {
 }
 
 async function failClosed(toolName: string, toolResponse: unknown): Promise<void> {
-  // Substitution de TOUS les champs texte par le message de rétention, en
-  // préservant la forme (contrainte updatedToolOutput).
+  // Replace ALL text fields with the retention message, preserving the
+  // shape (updatedToolOutput constraint).
   const { response } = await transformToolResponse(
     toolName,
     toolResponse,
     async () => RETENTION_MESSAGE,
   );
-  emit(response, "PasteGuard indisponible : sorties d'outils retenues (fail-closed).");
+  emit(response, "PasteGuard unavailable: tool outputs withheld (fail-closed).");
 }
 
 let payload: HookPayload = {};
 try {
   payload = JSON.parse(await Bun.stdin.text()) as HookPayload;
+  if (!(await shouldRunHooks())) process.exit(0);
+
   const sessionId = payload.session_id;
   const toolName = payload.tool_name;
   const toolResponse = payload.tool_response;
@@ -81,11 +84,11 @@ try {
   emit(response);
   process.exit(0);
 } catch (err) {
-  // D6 : toute erreur (PasteGuard down, verrou, payload imprévu) → rétention.
+  // D6: any error (PasteGuard down, lock, unexpected payload) → retention.
   try {
     await failClosed(payload.tool_name ?? "", payload.tool_response ?? RETENTION_MESSAGE);
   } catch {
-    emit(RETENTION_MESSAGE, "PasteGuard : échec du masquage ET de la substitution.");
+    emit(RETENTION_MESSAGE, "PasteGuard: masking AND substitution both failed.");
   }
   if (err instanceof Error) console.error(err.message);
   process.exit(0);

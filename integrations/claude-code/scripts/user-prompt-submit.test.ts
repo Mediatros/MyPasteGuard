@@ -13,7 +13,7 @@ interface FakeCall {
   body: unknown;
 }
 
-/** Faux moteur /api/mask : renvoie les entités fournies, enregistre les appels. */
+/** Fake /api/mask engine: returns the provided entities, records the calls. */
 function fakeEngine(
   entities: { type: string; placeholder: string }[],
   calls?: FakeCall[],
@@ -43,22 +43,22 @@ function noCallFetch(calls: FakeCall[]): FetchLike {
 }
 
 describe("readPromptMode", () => {
-  test("défaut off si variable absente", () => {
+  test("defaults to off if variable is absent", () => {
     expect(readPromptMode({})).toBe("off");
   });
 
-  test("valeur inconnue retombe sur off", () => {
-    expect(readPromptMode({ PASTEGUARD_PROMPT_MODE: "n'importe quoi" })).toBe("off");
+  test("unknown value falls back to off", () => {
+    expect(readPromptMode({ PASTEGUARD_PROMPT_MODE: "whatever" })).toBe("off");
   });
 
-  test("warn et block reconnus", () => {
+  test("warn and block recognized", () => {
     expect(readPromptMode({ PASTEGUARD_PROMPT_MODE: "warn" })).toBe("warn");
     expect(readPromptMode({ PASTEGUARD_PROMPT_MODE: "block" })).toBe("block");
   });
 });
 
 describe("summarizeEntities / messages", () => {
-  test("types uniques, ordre de première apparition", () => {
+  test("unique types, order of first appearance", () => {
     const summary = summarizeEntities([
       { type: "PERSON", placeholder: "[[PERSON_1]]" },
       { type: "EMAIL_ADDRESS", placeholder: "[[EMAIL_ADDRESS_1]]" },
@@ -67,7 +67,7 @@ describe("summarizeEntities / messages", () => {
     expect(summary).toEqual({ types: ["PERSON", "EMAIL_ADDRESS"], total: 3 });
   });
 
-  test("le message d'avertissement ne contient que types + nombre, jamais de valeur", () => {
+  test("the warning message contains only types + count, never a value", () => {
     const msg = buildWarningMessage({
       types: ["PERSON", "EMAIL_ADDRESS"],
       total: 2,
@@ -77,7 +77,7 @@ describe("summarizeEntities / messages", () => {
     expect(msg).not.toContain("@");
   });
 
-  test("la raison de blocage ne contient que les types, jamais de valeur", () => {
+  test("the block reason contains only the types, never a value", () => {
     const reason = buildBlockReason({ types: ["EMAIL_ADDRESS"], total: 1 });
     expect(reason).toContain("EMAIL_ADDRESS");
     expect(reason).toContain("!pg-off");
@@ -85,16 +85,16 @@ describe("summarizeEntities / messages", () => {
 });
 
 describe("analysePrompt", () => {
-  test("mode off : aucun appel réseau, sortie none", async () => {
+  test("off mode: no network call, none outcome", async () => {
     const calls: FakeCall[] = [];
-    const outcome = await analysePrompt("off", "mon email est jean@exemple.fr", {
+    const outcome = await analysePrompt("off", "my email is jean@exemple.fr", {
       fetchFn: noCallFetch(calls),
     });
     expect(outcome).toEqual({ kind: "none" });
     expect(calls.length).toBe(0);
   });
 
-  test("prompt vide : aucun appel réseau", async () => {
+  test("empty prompt: no network call", async () => {
     const calls: FakeCall[] = [];
     const outcome = await analysePrompt("warn", "   ", {
       fetchFn: noCallFetch(calls),
@@ -103,7 +103,7 @@ describe("analysePrompt", () => {
     expect(calls.length).toBe(0);
   });
 
-  test("préfixe !pg-off : aucun appel réseau", async () => {
+  test("!pg-off prefix: no network call", async () => {
     const calls: FakeCall[] = [];
     const outcome = await analysePrompt("block", "!pg-off jean@exemple.fr", {
       fetchFn: noCallFetch(calls),
@@ -112,16 +112,16 @@ describe("analysePrompt", () => {
     expect(calls.length).toBe(0);
   });
 
-  test("prompt propre (aucune entité) : sortie none", async () => {
-    const outcome = await analysePrompt("warn", "bonjour, comment ça va ?", {
+  test("clean prompt (no entity): none outcome", async () => {
+    const outcome = await analysePrompt("warn", "hello, how are you?", {
       fetchFn: fakeEngine([]),
     });
     expect(outcome).toEqual({ kind: "none" });
   });
 
-  test("mode warn, détection positive : systemMessage avec types, sans valeur", async () => {
+  test("warn mode, positive detection: systemMessage with types, no value", async () => {
     const calls: FakeCall[] = [];
-    const outcome = await analysePrompt("warn", "contacte jean@exemple.fr", {
+    const outcome = await analysePrompt("warn", "contact jean@exemple.fr", {
       fetchFn: fakeEngine([{ type: "EMAIL_ADDRESS", placeholder: "[[EMAIL_ADDRESS_1]]" }], calls),
     });
     expect(outcome.kind).toBe("warn");
@@ -129,12 +129,12 @@ describe("analysePrompt", () => {
       expect(outcome.systemMessage).toContain("EMAIL_ADDRESS");
       expect(outcome.systemMessage).not.toContain("jean@exemple.fr");
     }
-    // Détection pure : pas de startFrom, pas de session_id dans le corps envoyé.
-    expect(calls[0]?.body).toEqual({ text: "contacte jean@exemple.fr" });
+    // Pure detection: no startFrom, no session_id in the request body.
+    expect(calls[0]?.body).toEqual({ text: "contact jean@exemple.fr" });
   });
 
-  test("mode block, détection positive : decision block avec reason listant les types", async () => {
-    const outcome = await analysePrompt("block", "contacte jean@exemple.fr", {
+  test("block mode, positive detection: block decision with reason listing the types", async () => {
+    const outcome = await analysePrompt("block", "contact jean@exemple.fr", {
       fetchFn: fakeEngine([{ type: "EMAIL_ADDRESS", placeholder: "[[EMAIL_ADDRESS_1]]" }]),
     });
     expect(outcome.kind).toBe("block");
@@ -144,30 +144,30 @@ describe("analysePrompt", () => {
     }
   });
 
-  test("moteur down (fetch qui rejette) : aucune sortie, aucun blocage", async () => {
+  test("engine down (fetch rejects): no output, no blocking", async () => {
     const outcome = await analysePrompt("block", "jean@exemple.fr", {
       fetchFn: rejectingFetch(),
     });
     expect(outcome).toEqual({ kind: "none" });
   });
 
-  test("statut HTTP non ok : aucune sortie, aucun blocage", async () => {
+  test("non-ok HTTP status: no output, no blocking", async () => {
     const outcome = await analysePrompt("warn", "jean@exemple.fr", {
-      fetchFn: async () => new Response("erreur", { status: 503 }),
+      fetchFn: async () => new Response("error", { status: 503 }),
     });
     expect(outcome).toEqual({ kind: "none" });
   });
 
-  test("payload imprévu (entities absent) : aucune sortie", async () => {
+  test("unexpected payload (entities missing): no output", async () => {
     const outcome = await analysePrompt("warn", "jean@exemple.fr", {
       fetchFn: async () => new Response(JSON.stringify({ surprise: true }), { status: 200 }),
     });
     expect(outcome).toEqual({ kind: "none" });
   });
 
-  test("JSON invalide en réponse : aucune sortie", async () => {
+  test("invalid JSON in response: no output", async () => {
     const outcome = await analysePrompt("warn", "jean@exemple.fr", {
-      fetchFn: async () => new Response("pas du json", { status: 200 }),
+      fetchFn: async () => new Response("not json", { status: 200 }),
     });
     expect(outcome).toEqual({ kind: "none" });
   });

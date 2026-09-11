@@ -1,13 +1,16 @@
 /**
- * Hook PreToolUse : restaure les vraies valeurs dans les entrées des outils
- * à effet LOCAL avant exécution (lot 4). Mode validé en V2 (claude 2.1.215) :
- * `updatedInput` SANS permissionDecision — honoré, flux de permission préservé.
- * Politique D6 : placeholder non résolu ou erreur de store → deny, jamais
- * laisser s'exécuter une entrée corrompue.
- * Limite prouvée (V2) : un Edit dont old_string ne matche pas le disque échoue
- * AVANT ce hook ; ce cas est traité par consigne côté projet protégé (Bash sed).
- * stdout = UNIQUEMENT le JSON de réponse du hook (règle R12).
+ * PreToolUse hook: restores the real values in tool inputs with a LOCAL
+ * effect before execution (batch 4). Mode validated in V2 (claude 2.1.215):
+ * `updatedInput` WITHOUT permissionDecision, honored, permission flow
+ * preserved.
+ * Policy D6: unresolved placeholder or store error → deny, never let a
+ * corrupted input execute.
+ * Proven limitation (V2): an Edit whose old_string doesn't match the disk
+ * fails BEFORE this hook; this case is handled by instruction on the
+ * protected project side (Bash sed).
+ * stdout = ONLY the hook response JSON (rule R12).
  */
+import { shouldRunHooks } from "../lib/auth-mode";
 import { withSessionLock } from "../lib/store";
 import { inputHasPlaceholders, restoreToolInput } from "../lib/tool-input";
 
@@ -33,20 +36,22 @@ function emitDeny(reason: string): void {
 let payload: HookPayload = {};
 try {
   payload = JSON.parse(await Bun.stdin.text()) as HookPayload;
+  if (!(await shouldRunHooks())) process.exit(0);
+
   const { session_id: sessionId, tool_name: toolName, tool_input: toolInput } = payload;
   if (!toolName || toolInput === undefined || toolInput === null) process.exit(0);
 
-  // Cas ultra-majoritaire : aucun placeholder dans les champs candidats.
+  // Overwhelming majority case: no placeholder in the candidate fields.
   if (!inputHasPlaceholders(toolName, toolInput)) process.exit(0);
 
   if (!sessionId) {
     emitDeny(
-      "PasteGuard : placeholders présents mais session_id absent du payload, restauration impossible.",
+      "PasteGuard: placeholders present but session_id missing from payload, restoration impossible.",
     );
     process.exit(0);
   }
 
-  // Verrou court : lecture cohérente de l'état pendant que d'autres hooks écrivent.
+  // Short lock: consistent state read while other hooks are writing.
   const result = await withSessionLock(sessionId, (state) =>
     restoreToolInput(state, toolName, toolInput),
   );
@@ -66,10 +71,10 @@ try {
   }
   process.exit(0);
 } catch (err) {
-  // D6 : erreur de verrou, de store ou payload imprévu → refuser l'exécution.
+  // D6: lock, store, or unexpected payload error → deny execution.
   emitDeny(
-    "PasteGuard : échec de la restauration des placeholders (état de session inaccessible). " +
-      "Vérifier la session PasteGuard puis réessayer.",
+    "PasteGuard: placeholder restoration failed (session state unreachable). " +
+      "Check the PasteGuard session then retry.",
   );
   if (err instanceof Error) console.error(err.message);
   process.exit(0);
