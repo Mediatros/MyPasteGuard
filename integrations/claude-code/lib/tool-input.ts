@@ -2,18 +2,17 @@ import { restoreText } from "./restore";
 import type { SessionState } from "./types";
 
 /**
- * Restauration des entrées d'outils LOCAUX (lot 4, décision D7) : quels champs
- * texte de tool_input peuvent contenir des placeholders à restaurer avant
- * exécution. Les outils à portée externe (WebFetch, WebSearch, MCP) ne sont
- * JAMAIS listés ici.
+ * Restoration of LOCAL tool inputs (batch 4, decision D7): which tool_input
+ * text fields may contain placeholders to restore before execution. Tools
+ * with external scope (WebFetch, WebSearch, MCP) are NEVER listed here.
  */
 
 const PLACEHOLDER_PATTERN = /\[\[[A-Z][A-Z0-9_]*_\d+\]\]/g;
 
 /**
- * Variante échappée pour regex shell (prouvé en E2E lot 4 : Claude écrit
- * `sed 's/\[\[EMAIL_ADDRESS_1\]\]/.../'`). Normalisée en placeholder brut
- * avant restauration, pour les commandes Bash uniquement.
+ * Escaped variant for shell regex (proven in E2E batch 4: Claude writes
+ * `sed 's/\[\[EMAIL_ADDRESS_1\]\]/.../'`). Normalized to a raw placeholder
+ * before restoration, for Bash commands only.
  */
 const ESCAPED_PLACEHOLDER_PATTERN = /\\\[\\\[([A-Z][A-Z0-9_]*_\d+)\\\]\\\]/g;
 
@@ -21,7 +20,7 @@ function unescapeShellPlaceholders(text: string): string {
   return text.replace(ESCAPED_PLACEHOLDER_PATTERN, "[[$1]]");
 }
 
-/** Champs de premier niveau à restaurer, par outil (plans/04, table). */
+/** Top-level fields to restore, per tool (plans/04, table). */
 const FIELDS_BY_TOOL: Record<string, string[]> = {
   Write: ["content", "file_path"],
   Edit: ["old_string", "new_string", "file_path"],
@@ -31,10 +30,10 @@ const FIELDS_BY_TOOL: Record<string, string[]> = {
 };
 
 /**
- * R7 : une valeur restaurée injectée dans une commande shell doit être inerte.
- * Alphanumériques et @ . - _ + : / uniquement ; tout le reste (espaces, quotes,
- * $, ;, |, &...) est refusé : le démasquage ne doit jamais transformer une
- * commande en autre chose que ce que l'utilisateur a vu.
+ * R7: a restored value injected into a shell command must be inert.
+ * Alphanumerics and @ . - _ + : / only; everything else (spaces, quotes,
+ * $, ;, |, &...) is refused: restoration must never turn a command into
+ * something other than what the user saw.
  */
 const SHELL_SAFE_VALUE = /^[A-Za-z0-9@.\-_+:/]+$/;
 
@@ -48,10 +47,10 @@ function placeholdersIn(text: string): string[] {
 }
 
 /**
- * Restaure les placeholders des champs texte d'un tool_input local.
- * Fail-closed (D6) : placeholder absent du mapping, ou valeur non shell-safe
- * pour Bash → deny (l'exécution aurait corrompu le fichier ou la commande).
- * Retourne l'objet tool_input COMPLET (contrainte updatedInput).
+ * Restores placeholders in the text fields of a local tool_input.
+ * Fail-closed (D6): placeholder missing from the mapping, or value not
+ * shell-safe for Bash → deny (execution would have corrupted the file or
+ * command). Returns the COMPLETE tool_input object (updatedInput constraint).
  */
 export function restoreToolInput(
   state: SessionState,
@@ -88,7 +87,7 @@ export function restoreToolInput(
     if (typeof value === "string") updatedInput[field] = restoreField(value);
   }
 
-  // MultiEdit : edits[i].old_string / new_string (structure imbriquée).
+  // MultiEdit: edits[i].old_string / new_string (nested structure).
   if (toolName === "MultiEdit" && Array.isArray(input.edits)) {
     updatedInput.edits = input.edits.map((edit) => {
       if (typeof edit !== "object" || edit === null) return edit;
@@ -105,25 +104,25 @@ export function restoreToolInput(
     return {
       action: "deny",
       reason:
-        `PasteGuard : placeholder(s) non résolu(s) dans ${toolName} : ` +
-        `${[...unresolved].join(", ")}. L'exécution aurait écrit ces placeholders ` +
-        "tels quels (fichier ou commande corrompus). Vérifier la session PasteGuard.",
+        `PasteGuard: unresolved placeholder(s) in ${toolName}: ` +
+        `${[...unresolved].join(", ")}. Execution would have written these ` +
+        "placeholders as-is (corrupted file or command). Check the PasteGuard session.",
     };
   }
   if (unsafe.size > 0) {
     return {
       action: "deny",
       reason:
-        `PasteGuard : valeur(s) restaurée(s) non sûre(s) pour une commande shell : ` +
-        `${[...unsafe].join(", ")}. Réécrire la commande sans ces valeurs ` +
-        "(par exemple via un fichier), ou opérer manuellement.",
+        `PasteGuard: unsafe restored value(s) for a shell command: ` +
+        `${[...unsafe].join(", ")}. Rewrite the command without these values ` +
+        "(for example via a file), or operate manually.",
     };
   }
   if (!changed) return { action: "none" };
   return { action: "update", updatedInput };
 }
 
-/** Vrai si au moins un champ candidat de cet outil contient un placeholder. */
+/** True if at least one candidate field of this tool contains a placeholder. */
 export function inputHasPlaceholders(toolName: string, toolInput: unknown): boolean {
   const fields = FIELDS_BY_TOOL[toolName];
   if (!fields || typeof toolInput !== "object" || toolInput === null) return false;

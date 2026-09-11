@@ -4,7 +4,7 @@ import { totalTextLength, transformToolResponse } from "./tool-output";
 const upper = async (text: string) => text.toUpperCase();
 
 describe("transformToolResponse", () => {
-  test("Read : seul file.content est transformé, forme préservée", async () => {
+  test("Read: only file.content is transformed, shape preserved", async () => {
     const response = {
       type: "text",
       file: {
@@ -27,11 +27,11 @@ describe("transformToolResponse", () => {
         totalLines: 1,
       },
     });
-    // L'original n'est pas muté.
+    // The original is not mutated.
     expect(response.file.content).toBe("secret");
   });
 
-  test("Bash : stdout et stderr transformés, flags intacts", async () => {
+  test("Bash: stdout and stderr transformed, flags untouched", async () => {
     const response = {
       stdout: "a",
       stderr: "b",
@@ -49,7 +49,7 @@ describe("transformToolResponse", () => {
     });
   });
 
-  test("Bash : stderr vide non transformé (pas d'appel inutile)", async () => {
+  test("Bash: empty stderr not transformed (no unnecessary call)", async () => {
     let calls = 0;
     const counting = async (t: string) => {
       calls++;
@@ -59,25 +59,25 @@ describe("transformToolResponse", () => {
     expect(calls).toBe(1);
   });
 
-  test("Edit : oldString, newString et originalFile transformés", async () => {
+  test("Edit: oldString, newString and originalFile transformed", async () => {
     const response = {
       filePath: "/tmp/a.txt",
-      oldString: "avant",
-      newString: "après",
-      originalFile: "tout le fichier",
+      oldString: "before",
+      newString: "after",
+      originalFile: "whole file",
       replaceAll: false,
       structuredPatch: [],
       userModified: false,
     };
     const { response: out } = await transformToolResponse("Edit", response, upper);
     const o = out as Record<string, unknown>;
-    expect(o.oldString).toBe("AVANT");
-    expect(o.newString).toBe("APRÈS");
-    expect(o.originalFile).toBe("TOUT LE FICHIER");
+    expect(o.oldString).toBe("BEFORE");
+    expect(o.newString).toBe("AFTER");
+    expect(o.originalFile).toBe("WHOLE FILE");
     expect(o.filePath).toBe("/tmp/a.txt");
   });
 
-  test("Agent : les blocs text de content[] sont transformés", async () => {
+  test("Agent: text blocks in content[] are transformed", async () => {
     const response = {
       status: "completed",
       content: [{ type: "text", text: "rapport" }],
@@ -88,7 +88,7 @@ describe("transformToolResponse", () => {
     expect((out as { content: { text: string }[] }).content[0]?.text).toBe("RAPPORT");
   });
 
-  test("outil inconnu : feuilles longues transformées, micro-champs épargnés (MCP)", async () => {
+  test("unknown tool: long leaves transformed, micro-fields spared (MCP)", async () => {
     const response = {
       content: [{ type: "text", text: "rapport client" }],
       meta: { note: "note interne" },
@@ -102,20 +102,20 @@ describe("transformToolResponse", () => {
     });
   });
 
-  test("réponse string brute transformée", async () => {
+  test("raw string response transformed", async () => {
     const { response: out, touched } = await transformToolResponse("Weird", "texte", upper);
     expect(out).toBe("TEXTE");
     expect(touched).toBe(true);
   });
 
-  test("réponse sans texte : touched false", async () => {
+  test("response without text: touched false", async () => {
     const { touched } = await transformToolResponse("Grep", { numFiles: 0, filenames: [] }, upper);
     expect(touched).toBe(false);
   });
 });
 
 describe("totalTextLength", () => {
-  test("somme des champs texte de l'outil", async () => {
+  test("sum of the tool's text fields", async () => {
     const response = { stdout: "12345", stderr: "678" };
     expect(await totalTextLength("Bash", response)).toBe(8);
   });

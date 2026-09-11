@@ -15,7 +15,7 @@ const MAPPING = {
 };
 
 describe("restoreToolInput — Write", () => {
-  test("content et file_path restaurés, autres champs intacts", () => {
+  test("content and file_path restored, other fields untouched", () => {
     const state = stateWith(MAPPING);
     const result = restoreToolInput(state, "Write", {
       file_path: "/tmp/rapport-[[PERSON_1]].md",
@@ -29,7 +29,7 @@ describe("restoreToolInput — Write", () => {
     });
   });
 
-  test("placeholder inconnu → deny, rien n'est écrit", () => {
+  test("unknown placeholder → deny, nothing is written", () => {
     const state = stateWith(MAPPING);
     const result = restoreToolInput(state, "Write", {
       file_path: "/tmp/x.md",
@@ -42,7 +42,7 @@ describe("restoreToolInput — Write", () => {
 });
 
 describe("restoreToolInput — Edit", () => {
-  test("old_string et new_string restaurés, updatedInput complet", () => {
+  test("old_string and new_string restored, updatedInput complete", () => {
     const state = stateWith(MAPPING);
     const input = {
       file_path: "/tmp/f.txt",
@@ -63,7 +63,7 @@ describe("restoreToolInput — Edit", () => {
 });
 
 describe("restoreToolInput — MultiEdit", () => {
-  test("seuls les edits avec placeholders changent, structure préservée", () => {
+  test("only edits with placeholders change, structure preserved", () => {
     const state = stateWith(MAPPING);
     const result = restoreToolInput(state, "MultiEdit", {
       file_path: "/tmp/f.txt",
@@ -84,7 +84,7 @@ describe("restoreToolInput — MultiEdit", () => {
 });
 
 describe("restoreToolInput — NotebookEdit", () => {
-  test("new_source restauré", () => {
+  test("new_source restored", () => {
     const state = stateWith(MAPPING);
     const result = restoreToolInput(state, "NotebookEdit", {
       notebook_path: "/tmp/n.ipynb",
@@ -99,7 +99,7 @@ describe("restoreToolInput — NotebookEdit", () => {
 });
 
 describe("restoreToolInput — Bash (R7 shell-safe)", () => {
-  test("valeur shell-safe restaurée dans command, description intacte", () => {
+  test("shell-safe value restored in command, description untouched", () => {
     const state = stateWith(MAPPING);
     const result = restoreToolInput(state, "Bash", {
       command: "grep '[[EMAIL_ADDRESS_1]]' clients.txt",
@@ -111,7 +111,7 @@ describe("restoreToolInput — Bash (R7 shell-safe)", () => {
     expect(result.updatedInput.description).toBe("cherche [[EMAIL_ADDRESS_1]]");
   });
 
-  test("valeur avec espace (nom complet) → deny, commande non exécutée", () => {
+  test("value with a space (full name) → deny, command not executed", () => {
     const state = stateWith(MAPPING);
     const result = restoreToolInput(state, "Bash", {
       command: "grep '[[PERSON_1]]' clients.txt",
@@ -121,7 +121,7 @@ describe("restoreToolInput — Bash (R7 shell-safe)", () => {
     expect(result.reason).toContain("[[PERSON_1]]");
   });
 
-  test("placeholder échappé pour sed restauré (bug E2E lot 4)", () => {
+  test("escaped placeholder for sed restored (E2E bug batch 4)", () => {
     const state = stateWith(MAPPING);
     const result = restoreToolInput(state, "Bash", {
       command: "sed -i '' 's/\\[\\[EMAIL_ADDRESS_1\\]\\]/contact@example.org/' clients.txt",
@@ -133,7 +133,7 @@ describe("restoreToolInput — Bash (R7 shell-safe)", () => {
     );
   });
 
-  test("placeholder échappé inconnu → deny (pas de sed silencieux sans effet)", () => {
+  test("unknown escaped placeholder → deny (no silent no-op sed)", () => {
     const state = stateWith(MAPPING);
     const result = restoreToolInput(state, "Bash", {
       command: "sed 's/\\[\\[EMAIL_ADDRESS_9\\]\\]/x/' f.txt",
@@ -141,7 +141,7 @@ describe("restoreToolInput — Bash (R7 shell-safe)", () => {
     expect(result.action).toBe("deny");
   });
 
-  test("valeur avec métacaractère shell → deny", () => {
+  test("value with a shell metacharacter → deny", () => {
     const state = stateWith({ "[[ENV_PASSWORD_1]]": "p@ss;rm -rf" });
     const result = restoreToolInput(state, "Bash", {
       command: "echo [[ENV_PASSWORD_1]]",
@@ -150,8 +150,8 @@ describe("restoreToolInput — Bash (R7 shell-safe)", () => {
   });
 });
 
-describe("restoreToolInput — cas transverses", () => {
-  test("aucun placeholder → none", () => {
+describe("restoreToolInput — cross-cutting cases", () => {
+  test("no placeholder → none", () => {
     const result = restoreToolInput(stateWith(MAPPING), "Write", {
       file_path: "/tmp/x",
       content: "rien",
@@ -159,7 +159,7 @@ describe("restoreToolInput — cas transverses", () => {
     expect(result.action).toBe("none");
   });
 
-  test("outil hors périmètre (WebFetch) → none même avec placeholder", () => {
+  test("out-of-scope tool (WebFetch) → none even with a placeholder", () => {
     const result = restoreToolInput(stateWith(MAPPING), "WebFetch", {
       url: "https://ex.com/[[PERSON_1]]",
       prompt: "[[EMAIL_ADDRESS_1]]",
@@ -167,7 +167,7 @@ describe("restoreToolInput — cas transverses", () => {
     expect(result.action).toBe("none");
   });
 
-  test("un seul placeholder inconnu parmi des connus → deny (fail-closed)", () => {
+  test("single unknown placeholder among known ones → deny (fail-closed)", () => {
     const result = restoreToolInput(stateWith(MAPPING), "Write", {
       file_path: "/tmp/x",
       content: "[[PERSON_1]] et [[PERSON_2]]",
@@ -180,11 +180,11 @@ describe("restoreToolInput — cas transverses", () => {
 });
 
 describe("inputHasPlaceholders", () => {
-  test("détecte dans un champ simple", () => {
+  test("detects in a simple field", () => {
     expect(inputHasPlaceholders("Bash", { command: "echo [[A_1]]" })).toBe(true);
   });
 
-  test("détecte dans les edits de MultiEdit", () => {
+  test("detects in MultiEdit edits", () => {
     expect(
       inputHasPlaceholders("MultiEdit", {
         file_path: "/tmp/f",
@@ -193,7 +193,7 @@ describe("inputHasPlaceholders", () => {
     ).toBe(true);
   });
 
-  test("faux si outil hors périmètre ou sans placeholder", () => {
+  test("false if tool is out of scope or has no placeholder", () => {
     expect(inputHasPlaceholders("WebFetch", { url: "[[A_1]]" })).toBe(false);
     expect(inputHasPlaceholders("Bash", { command: "ls" })).toBe(false);
   });

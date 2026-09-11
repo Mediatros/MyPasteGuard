@@ -9,25 +9,25 @@ function stateWith(mapping: Record<string, string>) {
 }
 
 describe("computeDisplayContent", () => {
-  test("placeholders connus restaurés", () => {
+  test("known placeholders restored", () => {
     const state = stateWith({ "[[PERSON_1]]": "Jean Dupont" });
-    expect(computeDisplayContent(state, "Bonjour [[PERSON_1]]")).toBe("Bonjour Jean Dupont");
+    expect(computeDisplayContent(state, "Hello [[PERSON_1]]")).toBe("Hello Jean Dupont");
   });
 
-  test("message sans placeholder : aucune sortie (U2)", () => {
+  test("message without placeholder: no output (U2)", () => {
     const state = stateWith({ "[[PERSON_1]]": "Jean" });
-    expect(computeDisplayContent(state, "rien à restaurer ici")).toBeNull();
+    expect(computeDisplayContent(state, "nothing to restore here")).toBeNull();
   });
 
-  test("état de session vide/corrompu (mapping vide) : aucune sortie (U4)", () => {
-    expect(computeDisplayContent(freshState(), "Bonjour [[PERSON_1]]")).toBeNull();
+  test("empty/corrupted session state (empty mapping): no output (U4)", () => {
+    expect(computeDisplayContent(freshState(), "Hello [[PERSON_1]]")).toBeNull();
   });
 
-  test("texte undefined : aucune sortie", () => {
+  test("undefined text: no output", () => {
     expect(computeDisplayContent(freshState(), undefined)).toBeNull();
   });
 
-  test("texte vide : aucune sortie", () => {
+  test("empty text: no output", () => {
     expect(computeDisplayContent(freshState(), "")).toBeNull();
   });
 });

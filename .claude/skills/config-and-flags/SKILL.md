@@ -1,69 +1,69 @@
 ---
 name: config-and-flags
-description: Tous les axes de configuration PasteGuard — config.yaml (mode, providers, masking allowlist/denylist, pii_detection, secrets_detection, scan_roles, logging, dashboard), variables d'environnement, défauts et gardes Zod, et la checklist pour ajouter une option. À charger dès qu'une question touche config.yaml, un défaut, une variable d'env, un flag, ou « pourquoi ce comportement est-il activé/désactivé ».
+description: All PasteGuard configuration axes — config.yaml (mode, providers, masking allowlist/denylist, pii_detection, secrets_detection, scan_roles, logging, dashboard), environment variables, Zod defaults and guards, and the checklist for adding an option. Load as soon as a question touches config.yaml, a default, an environment variable, a flag, or "why is this behavior enabled/disabled".
 ---
 
-# Configuration et flags — PasteGuard
+# Configuration and Flags — PasteGuard
 
-Source de vérité du chargement : `src/config.ts` (`loadConfig`), validation Zod, tests dans `src/config.test.ts`. [read: from src/config.ts]
+Source of truth for loading: `src/config.ts` (`loadConfig`), Zod validation, tests in `src/config.test.ts`. [read: from src/config.ts]
 
-## Quand NE PAS utiliser cette skill
+## When NOT to use this skill
 
-- Pour démarrer l'environnement → skill `build-and-env`.
-- Pour le contrat des endpoints et le flux de masquage → skill `architecture-contract`.
-- Pour la sémantique fine de détection (floors GLiNER, fusion) → skill `domain-reference`.
+- To start the environment → skill `build-and-env`.
+- For the endpoint contract and the masking flow → skill `architecture-contract`.
+- For fine-grained detection semantics (GLiNER floors, merge) → skill `domain-reference`.
 
-## Chargement
+## Loading
 
-`loadConfig` essaie dans l'ordre : `./config.yaml`, `./config.yml`, `./config.example.yaml`. Erreur explicite si le chemin est un répertoire (#3). Substitution `${VAR}` et `${VAR:-default}` récursive AVANT validation Zod. Singleton via `getConfig()`. [read: from src/config.ts]
+`loadConfig` tries, in order: `./config.yaml`, `./config.yml`, `./config.example.yaml`. Explicit error if the path is a directory (#3). Recursive `${VAR}` and `${VAR:-default}` substitution BEFORE Zod validation. Singleton via `getConfig()`. [read: from src/config.ts]
 
-Le `config.yaml` local ne diffère de `config.example.yaml` que par le bloc `local:` commenté ; il est exclu de git (`.git/info/exclude`, voir `build-and-env`). [verified: executed diff 2026-07-07]
+The local `config.yaml` differs from `config.example.yaml` only by the commented-out `local:` block; it is excluded from git (`.git/info/exclude`, see `build-and-env`). [verified: executed diff 2026-07-07]
 
-## Axes de configuration
+## Configuration axes
 
-| Axe | Clés et défauts | Notes |
+| Axis | Keys and defaults | Notes |
 |---|---|---|
-| `mode` | `mask` \| `route` | Défaut Zod = `route`, mais config.example.yaml fixe `mask`. `route` EXIGE un bloc `local:` (refine Zod). |
+| `mode` | `mask` \| `route` | Zod default = `route`, but config.example.yaml sets `mask`. `route` REQUIRES a `local:` block (Zod refine). |
 | `server` | port 3000, host 0.0.0.0, `request_timeout` 600 s (0 = off) | |
-| `providers` | `openai` (requis), `anthropic`, `codex` : `base_url` + `api_key` fallback optionnel | Le proxy forwarde l'auth du client ; la clé config n'est qu'un fallback. |
-| `local` | type `ollama` \| `openai`, base_url, model | Utilisé seulement en mode route. |
-| `masking` | `show_markers` false, `marker_text` "[protected]", `allowlist`, `denylist` | Marqueurs appliqués aussi aux secrets restaurés (#122). |
-| `pii_detection` | `enabled` true, `detector_url` (requis, ex. `${DETECTOR_URL:-http://localhost:5002}`), `detector_timeout` 30 s (0 = off, #137), `phone_regions` [] (= formats internationaux `+` uniquement, #111), `score_threshold` 0.7, `entities` | Entités par défaut : PERSON, LOCATION, EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, IBAN_CODE, IP_ADDRESS, VAT_CODE. |
-| `secrets_detection` | `enabled` true, `action` mask \| block \| route_local, 10 types tous actifs par défaut (#106), `max_scan_chars` 200000 (0 = tout), `log_detected_types` true | Types : OPENSSH_PRIVATE_KEY, PEM_PRIVATE_KEY, API_KEY_SK, API_KEY_AWS, API_KEY_GITHUB, JWT_TOKEN, BEARER_TOKEN, ENV_PASSWORD, ENV_SECRET, CONNECTION_STRING. |
-| `scan_roles` (PII et secrets séparément) | défaut `[user, tool, function, mcp]` ; rôles connus : + system, developer, assistant ; liste vide → retombe sur le défaut | Introduit par #115 pour ne plus masquer le contexte injecté par le harnais (system-reminder, environment_context). Voir l'historique de cette doctrine dans `failure-archaeology` (entrée I). |
-| `logging` | driver `sqlite` (défaut, `./data/pasteguard.db`) \| `postgres` (exige `postgres_url`, #127), `retention_days` 30 (0 = infini, nettoyage au boot puis quotidien), `log_masked_content` true | |
-| `dashboard` | `enabled` true, basic auth optionnelle | |
+| `providers` | `openai` (required), `anthropic`, `codex`: `base_url` + optional `api_key` fallback | The proxy forwards the client's auth; the config key is only a fallback. |
+| `local` | type `ollama` \| `openai`, base_url, model | Used only in route mode. |
+| `masking` | `show_markers` false, `marker_text` "[protected]", `allowlist`, `denylist` | Markers also applied to restored secrets (#122). |
+| `pii_detection` | `enabled` true, `detector_url` (required, e.g. `${DETECTOR_URL:-http://localhost:5002}`), `detector_timeout` 30 s (0 = off, #137), `phone_regions` [] (= international `+`-only formats, #111), `score_threshold` 0.7, `entities` | Default entities: PERSON, LOCATION, EMAIL_ADDRESS, PHONE_NUMBER, CREDIT_CARD, IBAN_CODE, IP_ADDRESS, VAT_CODE. |
+| `secrets_detection` | `enabled` true, `action` mask \| block \| route_local, 10 types all active by default (#106), `max_scan_chars` 200000 (0 = all), `log_detected_types` true | Types: OPENSSH_PRIVATE_KEY, PEM_PRIVATE_KEY, API_KEY_SK, API_KEY_AWS, API_KEY_GITHUB, JWT_TOKEN, BEARER_TOKEN, ENV_PASSWORD, ENV_SECRET, CONNECTION_STRING. |
+| `scan_roles` (PII and secrets separately) | default `[user, tool, function, mcp]`; known roles: + system, developer, assistant; empty list → falls back to the default | Introduced by #115 to stop masking context injected by the harness (system-reminder, environment_context). See the history of this doctrine in `failure-archaeology` (entry I). |
+| `logging` | driver `sqlite` (default, `./data/pasteguard.db`) \| `postgres` (requires `postgres_url`, #127), `retention_days` 30 (0 = unlimited, cleanup at boot then daily), `log_masked_content` true | |
+| `dashboard` | `enabled` true, optional basic auth | |
 
-[read: from src/config.ts et config.example.yaml]
+[read: from src/config.ts and config.example.yaml]
 
-## Gardes et incompatibilités
+## Guards and incompatibilities
 
-- `secrets_detection.action: route_local` est incompatible avec `mode: mask` : double garde, refine Zod + validation au démarrage avec `process.exit(1)`. [read: from src/config.ts, src/index.ts]
-- Allowlist par défaut CODÉE EN DUR (`DEFAULT_ALLOWLIST`, préfixée à toute allowlist utilisateur) : la phrase « You are Claude Code, Anthropic's official CLI for Claude. » n'est jamais masquée. [read: from src/config.ts]
-- Allowlist regex : ancrée `^(?:pattern)$` sur l'entité détectée ; motif matchant la chaîne vide rejeté à la validation. Denylist : pattern + type (+ regex), score forcé à 1. Renommée depuis `whitelist` en #104. [read: from src/config.ts, src/pii/detect.ts]
+- `secrets_detection.action: route_local` is incompatible with `mode: mask`: double guard, Zod refine + startup validation with `process.exit(1)`. [read: from src/config.ts, src/index.ts]
+- Default allowlist HARDCODED (`DEFAULT_ALLOWLIST`, prepended to any user allowlist): the phrase "You are Claude Code, Anthropic's official CLI for Claude." is never masked. [read: from src/config.ts]
+- Allowlist regex: anchored `^(?:pattern)$` on the detected entity; a pattern matching the empty string is rejected at validation. Denylist: pattern + type (+ regex), score forced to 1. Renamed from `whitelist` in #104. [read: from src/config.ts, src/pii/detect.ts]
 
-## Variables d'environnement hors config.yaml
+## Environment variables outside config.yaml
 
-| Variable | Rôle | Défaut |
+| Variable | Role | Default |
 |---|---|---|
-| `PASTEGUARD_STARTUP_TIMEOUT` | attente du détecteur au boot | 180 s |
-| `DETECTOR_URL` / `DETECTOR_TIMEOUT` | substituées dans config.example.yaml | :5002 / 30 s |
-| `PASTEGUARD_PORT` / `PASTEGUARD_DETECTOR_PORT` | ports docker-compose | 3000 / 5002 |
-| `DETECTOR_MODEL`, `DETECTOR_MODEL_PATH`, `DETECTOR_MAX_TOKENS` (384), `DETECTOR_FLOOR_PERSON\|LOCATION\|ADDRESS` | côté détecteur Python | voir `domain-reference` |
+| `PASTEGUARD_STARTUP_TIMEOUT` | wait for the detector at boot | 180 s |
+| `DETECTOR_URL` / `DETECTOR_TIMEOUT` | substituted in config.example.yaml | :5002 / 30 s |
+| `PASTEGUARD_PORT` / `PASTEGUARD_DETECTOR_PORT` | docker-compose ports | 3000 / 5002 |
+| `DETECTOR_MODEL`, `DETECTOR_MODEL_PATH`, `DETECTOR_MAX_TOKENS` (384), `DETECTOR_FLOOR_PERSON\|LOCATION\|ADDRESS` | detector-side (Python) | see `domain-reference` |
 
 [read: from src/index.ts, docker/Dockerfile, detector/detector/gliner_layer.py]
 
-## Checklist : ajouter une option de config
+## Checklist: adding a config option
 
-1. Schéma Zod + défaut dans `src/config.ts` (respecter les refine existants).
-2. Cas de test dans `src/config.test.ts` (défaut, valeur explicite, valeur invalide).
-3. Documenter dans `config.example.yaml` (commentaire + valeur par défaut).
-4. Si l'option est publique : mettre à jour `docs/configuration/*.mdx` (règle AGENTS.md, voir `change-control`).
-5. `bun test && bun run typecheck && bun run check` (voir `validation-and-qa`).
+1. Zod schema + default in `src/config.ts` (respect existing refines).
+2. Test case in `src/config.test.ts` (default, explicit value, invalid value).
+3. Document in `config.example.yaml` (comment + default value).
+4. If the option is public: update `docs/configuration/*.mdx` (AGENTS.md rule, see `change-control`).
+5. `bun test && bun run typecheck && bun run check` (see `validation-and-qa`).
 
-## Provenance et maintenance
+## Provenance and maintenance
 
-Rédigé le 2026-07-07 par audit complet du dépôt. Re-vérifications :
-- `diff config.yaml config.example.yaml` (dérive locale)
-- `grep -n "DEFAULT_ALLOWLIST\|scan_roles\|detector_timeout" src/config.ts` (gardes)
-- `git log --oneline -3 -- src/config.ts` (évolutions récentes)
+Written on 2026-07-07 via a full repository audit. Re-checks:
+- `diff config.yaml config.example.yaml` (local drift)
+- `grep -n "DEFAULT_ALLOWLIST\|scan_roles\|detector_timeout" src/config.ts` (guards)
+- `git log --oneline -3 -- src/config.ts` (recent changes)

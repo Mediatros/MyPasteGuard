@@ -1,36 +1,36 @@
 /**
- * Hook MessageDisplay : restaure à l'ÉCRAN les vraies valeurs des placeholders
- * `[[TYPE_n]]` (lot 5), sans toucher au transcript ni au contexte envoyé au
- * modèle. Timeout 10 s côté Claude Code : c'est ce qui impose une restauration
- * purement locale, AUCUN appel réseau (D3).
+ * MessageDisplay hook: restores the real values of `[[TYPE_n]]` placeholders
+ * ON SCREEN (batch 5), without touching the transcript or the context sent
+ * to the model. Claude Code enforces a 10s timeout, which is why restoration
+ * must be purely local, with NO network call (D3).
  *
- * Constat V3 (mesuré le 2026-07-20, headless `claude -p`) : MessageDisplay est
- * appelé UNE seule fois par message, avec `index: 0`, `final: true`, et
- * `delta` égal au message complet (pas de deltas incrémentaux). Le
- * comportement en session interactive avec streaming reste à confirmer ; ce
- * hook reste donc défensif face à un delta partiel.
+ * V3 finding (measured 2026-07-20, headless `claude -p`): MessageDisplay is
+ * called ONCE per message, with `index: 0`, `final: true`, and `delta` equal
+ * to the full message (no incremental deltas). Behavior in an interactive
+ * session with streaming remains to be confirmed; this hook therefore stays
+ * defensive against a partial delta.
  *
- * R10/R11 (coupure ou déformation d'un placeholder entre deltas) : stratégie
- * BEST-EFFORT, jamais de retenue de suffixe. Le texte affiché n'est JAMAIS
- * tronqué (les deltas ne sont pas cumulés ici : tronquer perdrait des
- * caractères). Un placeholder coupé (ex. `[[PER` en fin de delta) ou déformé
- * (retour à la ligne, espace, backtick insérés) reste affiché tel quel s'il
- * ne peut pas être résolu ; il sera corrigé au delta suivant ou au rendu
- * final. La restauration tolérante (R11) est gérée par `restoreTextTolerant`.
+ * R10/R11 (a placeholder split or garbled across deltas): BEST-EFFORT
+ * strategy, never withhold a suffix. The displayed text is NEVER truncated
+ * (deltas are not accumulated here: truncating would lose characters). A
+ * placeholder cut short (e.g. `[[PER` at the end of a delta) or garbled
+ * (newline, space, backtick inserted) is displayed as-is if it cannot be
+ * resolved; it will be fixed on the next delta or in the final render.
+ * Tolerant restoration (R11) is handled by `restoreTextTolerant`.
  *
- * Lecture de l'état SANS verrou (`loadState` direct, pas `withSessionLock`) :
- * une lecture en retard (état pas encore à jour) ne produit qu'un placeholder
- * non restauré à l'écran, jamais une fuite de valeur réelle. Le coût d'un
- * verrou (latence, contention avec PostToolUse/PreToolUse) n'est pas justifié
- * pour un hook purement cosmétique et à budget 10 s.
+ * State read WITHOUT a lock (direct `loadState`, not `withSessionLock`): a
+ * stale read (state not yet updated) only produces an unrestored placeholder
+ * on screen, never a leak of a real value. The cost of a lock (latency,
+ * contention with PostToolUse/PreToolUse) isn't justified for a purely
+ * cosmetic hook on a 10s budget.
  *
- * D6 inversé : toute erreur (état illisible, payload imprévu, JSON invalide)
- * → `process.exit(0)` SANS aucune sortie ; l'affichage reste tel quel. On
- * n'émet jamais un `displayContent` partiellement restauré depuis un état
- * douteux.
+ * Reversed D6: any error (unreadable state, unexpected payload, invalid
+ * JSON) → `process.exit(0)` with NO output at all; the display stays as-is.
+ * A partially restored `displayContent` from a doubtful state is never
+ * emitted.
  *
- * stdout = UNIQUEMENT le JSON de réponse du hook (règle R12). Les
- * diagnostics vont sur stderr.
+ * stdout = ONLY the hook response JSON (rule R12). Diagnostics go to
+ * stderr.
  */
 
 import { restoreTextTolerant } from "../lib/restore";
@@ -44,9 +44,9 @@ interface HookPayload {
 }
 
 /**
- * Calcule le contenu à afficher après restauration tolérante (R11), ou
- * `null` si rien ne doit être émis (texte vide, sans placeholder, ou aucune
- * correspondance résolue dans le mapping).
+ * Computes the content to display after tolerant restoration (R11), or
+ * `null` if nothing should be emitted (empty text, no placeholder, or no
+ * match resolved in the mapping).
  */
 export function computeDisplayContent(
   state: SessionState,
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
     const payload = JSON.parse(await Bun.stdin.text()) as HookPayload;
     const text = payload.message_text ?? payload.delta;
 
-    // Chemin rapide : pas de placeholder → pas besoin de lire le store.
+    // Fast path: no placeholder → no need to read the store.
     if (!text?.includes("[[")) process.exit(0);
 
     const sessionId = payload.session_id;
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
     );
     process.exit(0);
   } catch (err) {
-    // D6 inversé : erreur d'état, de payload ou de JSON → aucune sortie.
+    // Reversed D6: state, payload, or JSON error → no output.
     if (err instanceof Error) console.error(err.message);
     process.exit(0);
   }

@@ -28,8 +28,8 @@ async function tryBreakStaleLock(lockDir: string, staleMs: number): Promise<void
     const owner = JSON.parse(raw) as LockOwner;
     acquiredAtMs = Date.parse(owner.acquiredAt);
   } catch {
-    // owner.json absent ou illisible : verrou en cours d'acquisition ou déjà cassé.
-    // On ne casse que si on peut prouver la péremption via owner.json.
+    // owner.json missing or unreadable: lock is being acquired or already broken.
+    // Only break it if staleness can be proven via owner.json.
     return;
   }
   if (acquiredAtMs !== null && !Number.isNaN(acquiredAtMs) && Date.now() - acquiredAtMs > staleMs) {

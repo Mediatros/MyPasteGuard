@@ -10,13 +10,13 @@ async function tempDir(): Promise<string> {
 }
 
 describe("loadState / saveState", () => {
-  test("état vierge si fichier absent", async () => {
+  test("fresh state when file is absent", async () => {
     const dir = await tempDir();
     const state = await loadState("absent", dir);
     expect(state).toEqual({ version: 1, counters: {}, mapping: {} });
   });
 
-  test("aller-retour save puis load", async () => {
+  test("round trip: save then load", async () => {
     const dir = await tempDir();
     const state = freshState();
     state.counters.EMAIL_ADDRESS = 2;
@@ -25,7 +25,7 @@ describe("loadState / saveState", () => {
     expect(await loadState("s1", dir)).toEqual(state);
   });
 
-  test("JSON corrompu → état vierge + fichier .corrupt-*", async () => {
+  test("corrupted JSON → fresh state + .corrupt-* file", async () => {
     const dir = await tempDir();
     await writeFile(join(dir, "s2.json"), "{pas du json");
     const state = await loadState("s2", dir);
@@ -35,20 +35,20 @@ describe("loadState / saveState", () => {
     expect(files.includes("s2.json")).toBe(false);
   });
 
-  test("forme invalide (version inconnue) → état vierge", async () => {
+  test("invalid shape (unknown version) → fresh state", async () => {
     const dir = await tempDir();
     await writeFile(join(dir, "s3.json"), JSON.stringify({ version: 2 }));
     expect(await loadState("s3", dir)).toEqual(freshState());
   });
 
-  test("écriture atomique : pas de fichier temporaire résiduel", async () => {
+  test("atomic write: no leftover temporary file", async () => {
     const dir = await tempDir();
     await saveState("s4", freshState(), dir);
     const files = await readdir(dir);
     expect(files).toEqual(["s4.json"]);
   });
 
-  test("permissions : fichier 600", async () => {
+  test("permissions: file mode 600", async () => {
     const dir = await tempDir();
     await saveState("s5", freshState(), dir);
     const mode = (await stat(join(dir, "s5.json"))).mode & 0o777;
@@ -57,7 +57,7 @@ describe("loadState / saveState", () => {
 });
 
 describe("withSessionLock", () => {
-  test("mutations sauvegardées, valeur retournée", async () => {
+  test("mutations saved, value returned", async () => {
     const dir = await tempDir();
     const result = await withSessionLock(
       "s6",
@@ -71,7 +71,7 @@ describe("withSessionLock", () => {
     expect((await loadState("s6", dir)).counters.PERSON).toBe(1);
   });
 
-  test("sections critiques concurrentes sérialisées (pas de perte d'update)", async () => {
+  test("concurrent critical sections serialized (no lost updates)", async () => {
     const dir = await tempDir();
     await Promise.all(
       Array.from({ length: 10 }, () =>
@@ -91,7 +91,7 @@ describe("withSessionLock", () => {
 });
 
 describe("linkSession", () => {
-  test("copie l'état vers une nouvelle session, sans écraser un état existant", async () => {
+  test("copies state to a new session, without overwriting existing state", async () => {
     const dir = await tempDir();
     const state = freshState();
     state.mapping["[[PERSON_1]]"] = "Jean Dupont";
@@ -100,13 +100,13 @@ describe("linkSession", () => {
     expect(await linkSession("old", "new", dir)).toBe(true);
     expect((await loadState("new", dir)).mapping["[[PERSON_1]]"]).toBe("Jean Dupont");
 
-    // La cible existe désormais : pas d'écrasement.
+    // The target now exists: no overwrite.
     expect(await linkSession("old", "new", dir)).toBe(false);
-    // Source absente : échec propre.
+    // Missing source: clean failure.
     expect(await linkSession("missing", "new2", dir)).toBe(false);
   });
 
-  test("le contenu du fichier lié reste du JSON valide", async () => {
+  test("the linked file's content remains valid JSON", async () => {
     const dir = await tempDir();
     await saveState("a", freshState(), dir);
     await linkSession("a", "b", dir);

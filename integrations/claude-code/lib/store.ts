@@ -37,7 +37,7 @@ export async function loadState(sessionId: string, dir?: string): Promise<Sessio
     if (!isValidState(parsed)) throw new Error("invalid session state shape");
     return parsed;
   } catch {
-    // Fichier corrompu : le mettre de côté pour diagnostic et repartir vierge.
+    // Corrupted file: move it aside for diagnosis and start fresh.
     await rename(file, `${file}.corrupt-${Date.now()}`).catch(() => {});
     return freshState();
   }
@@ -69,7 +69,7 @@ export async function withSessionLock<T>(
   await mkdir(base, { recursive: true, mode: 0o700 });
   const release = await acquireLock(`${sessionFile(sessionId, opts?.dir)}.lock`, opts?.lock);
   try {
-    // Toujours relire sous verrou : un autre hook a pu écrire entre-temps.
+    // Always re-read under the lock: another hook may have written in the meantime.
     const state = await loadState(sessionId, opts?.dir);
     const result = await fn(state);
     await saveState(sessionId, state, opts?.dir);
@@ -80,15 +80,15 @@ export async function withSessionLock<T>(
 }
 
 /**
- * Chaînage de session (préparation R6/V7) : si la nouvelle session n'a pas encore
- * d'état et que l'ancienne en a un, recopier le mapping pour que les placeholders
- * du transcript repris restent restaurables.
+ * Session linking (preparation for R6/V7): if the new session has no state yet
+ * and the old one does, copy the mapping over so that placeholders in the
+ * resumed transcript remain restorable.
  */
 export async function linkSession(fromId: string, toId: string, dir?: string): Promise<boolean> {
   const from = sessionFile(fromId, dir);
   const to = sessionFile(toId, dir);
   try {
-    await copyFile(from, to, 1 /* COPYFILE_EXCL : ne pas écraser un état existant */);
+    await copyFile(from, to, 1 /* COPYFILE_EXCL: do not overwrite existing state */);
     await chmod(to, 0o600).catch(() => {});
     return true;
   } catch {

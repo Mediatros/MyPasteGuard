@@ -9,7 +9,7 @@ async function tempDir(): Promise<string> {
 }
 
 describe("acquireLock", () => {
-  test("deux acquisitions concurrentes se sérialisent", async () => {
+  test("two concurrent acquisitions serialize", async () => {
     const lockDir = join(await tempDir(), "s.lock");
     const order: string[] = [];
 
@@ -27,7 +27,7 @@ describe("acquireLock", () => {
     expect(order).toEqual(["first held", "first releasing", "second acquired"]);
   });
 
-  test("verrou périmé (owner.json trop vieux) cassé et repris", async () => {
+  test("stale lock (owner.json too old) broken and reacquired", async () => {
     const lockDir = join(await tempDir(), "s.lock");
     await mkdir(lockDir);
     const stale = {
@@ -44,7 +44,7 @@ describe("acquireLock", () => {
     await release();
   });
 
-  test("timeout d'acquisition → LockTimeoutError", async () => {
+  test("acquisition timeout → LockTimeoutError", async () => {
     const lockDir = join(await tempDir(), "s.lock");
     const release = await acquireLock(lockDir);
     await expect(acquireLock(lockDir, { timeoutMs: 150, staleMs: 60_000 })).rejects.toBeInstanceOf(

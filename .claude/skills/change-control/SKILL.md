@@ -1,49 +1,49 @@
 ---
 name: change-control
-description: Comment les changements sont classés, gérés et livrés dans ce fork PasteGuard — état exact du fork et de la branche, ce qui est committable vs local-only, règles de commit/push, obligations de tests et de docs, territoires interdits. À charger avant tout commit, toute création de branche, toute PR (upstream ou origin), ou quand on se demande « ai-je le droit de modifier/committer ça ».
+description: How changes are classified, managed, and delivered in this PasteGuard fork — exact state of the fork and the branch, what is committable vs local-only, commit/push rules, testing and documentation obligations, forbidden territories. Load before any commit, any branch creation, any PR (upstream or origin), or when wondering "am I allowed to modify/commit this".
 ---
 
-# Change control — fork PasteGuard
+# Change control — PasteGuard fork
 
-## Quand NE PAS utiliser cette skill
+## When NOT to use this skill
 
-- Pour lancer les vérifications elles-mêmes → skill `validation-and-qa`.
-- Pour savoir où écrire du nouveau code (src/ vs integrations/) → skill `architecture-contract`, section « Périmètre fork ».
+- To run the checks themselves → skill `validation-and-qa`.
+- To know where to write new code (src/ vs integrations/) → skill `architecture-contract`, "Fork scope" section.
 
-## État du fork (relevé 2026-07-07, re-vérifier avant d'agir)
+## Fork state (surveyed on 2026-07-07, re-verify before acting)
 
-- `origin` = https://github.com/Mediatros/pasteguard.git (fork de JB) ; `upstream` = https://github.com/sgasser/pasteguard.git. [verified: executed]
-- 144 commits, dernier `547e7c3` (Bump version to 0.7.5, 2026-07-03). Version 0.7.5, tag `v0.7.5`. [verified: executed]
-- Branche courante `fix/claude-code-transparency` : AUCUN commit d'avance sur `main` — tout le travail vit dans l'arbre NON committé : 9 fichiers modifiés (652+/109-) sous `src/masking/`, `src/providers/anthropic/`, `src/routes/anthropic*`, plus `src/providers/anthropic/client.test.ts` non suivi. [verified: executed git status/diff]
-- Ces modifications sont destinées à une future PR upstream (issue #139) : ne pas les jeter, ne pas les committer sans demande. Contexte complet : skill `failure-archaeology`.
-- Branches remote-only sur origin : `check-new-issue`, `repoint-extension-beta-links` (anciennes, rôle non investigué — ne pas y toucher sans vérification). [verified: executed]
+- `origin` = https://github.com/Mediatros/pasteguard.git (JB's fork); `upstream` = https://github.com/sgasser/pasteguard.git. [verified: executed]
+- 144 commits, latest `547e7c3` (Bump version to 0.7.5, 2026-07-03). Version 0.7.5, tag `v0.7.5`. [verified: executed]
+- Current branch `fix/claude-code-transparency`: NO commits ahead of `main` — all the work lives in the UNCOMMITTED working tree: 9 files modified (652+/109-) under `src/masking/`, `src/providers/anthropic/`, `src/routes/anthropic*`, plus untracked `src/providers/anthropic/client.test.ts`. [verified: executed git status/diff]
+- These changes are intended for a future upstream PR (issue #139): do not discard them, do not commit them without being asked. Full context: skill `failure-archaeology`.
+- Remote-only branches on origin: `check-new-issue`, `repoint-extension-beta-links` (old, role not investigated — do not touch without checking). [verified: executed]
 
-## Règles non négociables
+## Non-negotiable rules
 
-1. **Jamais de commit ni de push sans demande explicite de l'utilisateur.** (AGENTS.md + règle globale JB.)
-2. **Jamais committer** : `config.yaml`, `PROGRESS.md`, `data/`, `plans/`, `anatomy.md` — exclus via `.git/info/exclude`, donc git ne les protège que localement ; un `git add -f` les committerait. [verified: executed]
-3. **Avant toute livraison de code** : `bun test` + `bun run typecheck` + `bun run check` verts (AGENTS.md). Commandes et états attendus : skill `validation-and-qa`.
-4. **Tests obligatoires** quand on touche : masking, forwarding provider, logging, parsing de config, endpoints publics (AGENTS.md).
-5. **Docs publiques obligatoires** quand on change : endpoints publics, config provider, étapes de setup → mettre à jour README et `docs/*.mdx` (site Mintlify pasteguard.com/docs, registre `docs/mint.json`). (AGENTS.md)
-6. **Préférer les patterns existants** route/provider/extractor à toute nouvelle abstraction. (AGENTS.md)
-7. **Ne jamais modifier `~/.claude/settings.json`** pour ce projet : les hooks de la campagne se déclarent dans le `.claude/settings.json` d'un projet de TEST dédié (décision D9, voir `hooks-mvp-campaign`). [read: from plans/PLAN.md]
+1. **Never commit or push without an explicit user request.** (AGENTS.md + JB's global rule.)
+2. **Never commit**: `config.yaml`, `PROGRESS.md`, `data/`, `plans/`, `anatomy.md` — excluded via `.git/info/exclude`, so git only protects them locally; a `git add -f` would commit them. [verified: executed]
+3. **Before any code delivery**: `bun test` + `bun run typecheck` + `bun run check` green (AGENTS.md). Commands and expected states: skill `validation-and-qa`.
+4. **Tests are mandatory** when touching: masking, provider forwarding, logging, config parsing, public endpoints (AGENTS.md).
+5. **Public docs are mandatory** when changing: public endpoints, provider config, setup steps → update README and `docs/*.mdx` (Mintlify site pasteguard.com/docs, registry `docs/mint.json`). (AGENTS.md)
+6. **Prefer existing** route/provider/extractor patterns over any new abstraction. (AGENTS.md)
+7. **Never modify `~/.claude/settings.json`** for this project: the campaign's hooks are declared in the `.claude/settings.json` of a dedicated TEST project (decision D9, see `hooks-mvp-campaign`). [read: from plans/PLAN.md (local working notes, not committed)]
 
-## Classer un changement avant de coder
+## Classifying a change before coding
 
-| Type de changement | Territoire | Destination |
+| Change type | Territory | Destination |
 |---|---|---|
-| Correctif ou feature du moteur, utile à tous | `src/` + tests | candidat PR upstream (sur demande) |
-| Travail campagne hooks Claude Code | `integrations/claude-code/` (lot 2+) | fork uniquement |
-| Config/plan/état local | config.yaml, plans/, PROGRESS.md | jamais committé |
-| Docs publiques | README, docs/*.mdx | suit le changement de code concerné |
+| Engine fix or feature, useful to everyone | `src/` + tests | upstream PR candidate (on request) |
+| Claude Code hooks campaign work | `integrations/claude-code/` (batch 2+) | fork only |
+| Local config/plan/state | config.yaml, plans/, PROGRESS.md | never committed |
+| Public docs | README, docs/*.mdx | follows the related code change |
 
-## Hygiène de l'historique
+## History hygiene
 
-Pas de revert dans les 144 commits ; le style upstream est « une PR = un sujet, message impératif court + numéro de PR ». Aucun TODO/FIXME dans `src/` ni `detector/` : ne pas en introduire, ouvrir une entrée dans PROGRESS.md à la place. [verified: executed greps 2026-07-07]
+No revert among the 144 commits; the upstream style is "one PR = one topic, short imperative message + PR number". No TODO/FIXME in `src/` or `detector/`: do not introduce any, open an entry in PROGRESS.md instead. [verified: executed greps 2026-07-07]
 
-## Provenance et maintenance
+## Provenance and maintenance
 
-Rédigé le 2026-07-07 par audit complet du dépôt. Re-vérifications :
+Written on 2026-07-07 following a full repository audit. Re-checks:
 - `git remote -v && git status --short && git log --oneline -3`
 - `cat .git/info/exclude`
-- `git diff main --stat | tail -3` (état de la branche)
+- `git diff main --stat | tail -3` (branch state)

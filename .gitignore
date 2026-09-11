@@ -40,5 +40,5 @@ test-*.ts
 test-*.sh
 test-*.js
 
-# Rapports E2E (peuvent contenir des valeurs de fixtures)
-integrations/claude-code/e2e/resultats/
+# E2E reports (may contain fixture values)
+integrations/claude-code/e2e/results/

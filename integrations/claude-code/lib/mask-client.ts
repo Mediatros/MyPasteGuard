@@ -34,13 +34,13 @@ export interface MaskResult {
   changed: boolean;
 }
 
-/** Une « valeur » détectée qui contient déjà un placeholder est un artefact. */
+/** A detected "value" that already contains a placeholder is an artifact. */
 const PLACEHOLDER_IN_VALUE = /\[\[[A-Z][A-Z0-9_]*_\d+\]\]/;
 
 /**
- * Passe a de la dédup (D5) : remplacer les valeurs déjà connues du mapping par
- * leur placeholder existant, valeurs les plus longues d'abord (une valeur peut
- * être sous-chaîne d'une autre, ex. « Dupont » dans « Jean Dupont »).
+ * Pass A of de-duplication (D5): replace values already known in the mapping
+ * with their existing placeholder, longest values first (a value can be a
+ * substring of another, e.g. "Dupont" within "Jean Dupont").
  */
 function preReplace(state: SessionState, text: string): { text: string; count: number } {
   const entries = Object.entries(state.mapping).sort((a, b) => b[1].length - a[1].length);
@@ -82,10 +82,10 @@ async function callMaskApi(
 }
 
 /**
- * Masque un texte pour la session donnée. Toute la section critique (relecture
- * de l'état, pré-remplacement, appel API, fusion, écriture) est sous verrou de
- * session (D4). Les erreurs réseau remontent en MaskUnavailableError : la
- * politique fail-open/fail-closed appartient aux hooks (D6), pas à cette lib.
+ * Masks a text for the given session. The entire critical section (re-reading
+ * the state, pre-substitution, API call, merge, write) runs under the session
+ * lock (D4). Network errors propagate as MaskUnavailableError: the
+ * fail-open/fail-closed policy belongs to the hooks (D6), not to this library.
  */
 export async function maskText(
   sessionId: string,
@@ -100,8 +100,8 @@ export async function maskText(
       const pre = preReplace(state, text);
       const response = await callMaskApi(pre.text, state.counters, opts);
 
-      // Passe b de la dédup (D5) : le détecteur a pu trouver une variante d'une
-      // valeur déjà mappée sous un autre placeholder ; réutiliser l'ancien.
+      // Pass B of de-duplication (D5): the detector may have found a variant of a
+      // value already mapped under another placeholder; reuse the existing one.
       const valueToPlaceholder = new Map<string, string>();
       for (const [placeholder, value] of Object.entries(state.mapping)) {
         if (!valueToPlaceholder.has(value)) valueToPlaceholder.set(value, placeholder);
@@ -109,9 +109,9 @@ export async function maskText(
       let masked = response.masked;
       for (const [placeholder, value] of Object.entries(response.context)) {
         if (PLACEHOLDER_IN_VALUE.test(value)) {
-          // Le détecteur a re-détecté un placeholder issu du pré-remplacement
-          // (ex. GLiNER voit « [[PERSON_2]] » comme une personne) : annuler ce
-          // masquage, sinon le mapping devient une poupée russe irrécupérable.
+          // The detector re-detected a placeholder from the pre-substitution
+          // step (e.g. GLiNER sees "[[PERSON_2]]" as a person): cancel this
+          // masking, otherwise the mapping becomes an unrecoverable nested-placeholder bug.
           masked = masked.split(placeholder).join(value);
           continue;
         }

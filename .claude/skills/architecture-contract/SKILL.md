@@ -1,69 +1,69 @@
 ---
 name: architecture-contract
-description: Les décisions de conception porteuses de PasteGuard et les invariants à ne jamais casser — flux de masquage complet, format de placeholder [[TYPE_n]], ordre secrets avant PII, offsets UTF-16, scans détecteur séquentiels, contrats POST /api/mask et /analyze, périmètre fork (src/ vs integrations/). À charger avant toute modification du flux de masquage, des extractors, des providers ou des routes, pour comprendre « comment ça marche », ou quand un choix paraît bizarre et qu'on est tenté de le « corriger ».
+description: The load-bearing design decisions of PasteGuard and the invariants never to break — full masking flow, [[TYPE_n]] placeholder format, secrets-before-PII order, UTF-16 offsets, sequential detector scans, POST /api/mask and /analyze contracts, fork scope (src/ vs integrations/). Load before any change to the masking flow, extractors, providers, or routes, to understand "how it works", or when a choice looks odd and you're tempted to "fix" it.
 ---
 
-# Contrat d'architecture — PasteGuard
+# Architecture contract — PasteGuard
 
-## Quand NE PAS utiliser cette skill
+## When NOT to use this skill
 
-- Pour la sémantique de détection (GLiNER, fusion, denylist) → skill `domain-reference`.
-- Pour l'histoire des bugs derrière ces invariants → skill `failure-archaeology`.
-- Pour la campagne hooks Claude Code → skill `hooks-mvp-campaign`.
+- For detection semantics (GLiNER, merging, denylist) → skill `domain-reference`.
+- For the history of bugs behind these invariants → skill `failure-archaeology`.
+- For the Claude Code hooks campaign → skill `hooks-mvp-campaign`.
 
-## Vue d'ensemble
+## Overview
 
-`src/index.ts` : middlewares (X-Request-ID, cors, logger) puis montage de `/` (health, info), `/openai`, `/anthropic`, `/codex`, `/api`, `/dashboard`. Au boot : validation config, attente du détecteur (exit 1 si absent), scheduler de nettoyage des logs, arrêt propre SIGTERM/SIGINT. [read: from src/index.ts]
+`src/index.ts`: middlewares (X-Request-ID, cors, logger) then mounts `/` (health, info), `/openai`, `/anthropic`, `/codex`, `/api`, `/dashboard`. On boot: config validation, waiting for the detector (exit 1 if absent), log cleanup scheduler, graceful SIGTERM/SIGINT shutdown. [read: from src/index.ts]
 
-Endpoints primaires : `POST /openai/v1/chat/completions`, `POST /anthropic/v1/messages`, `POST /codex/responses`, `GET /health`, `GET /info`. [read: from AGENTS.md]
+Primary endpoints: `POST /openai/v1/chat/completions`, `POST /anthropic/v1/messages`, `POST /codex/responses`, `GET /health`, `GET /info`. [read: from AGENTS.md]
 
-Flux de masquage d'une requête provider :
+Masking flow for a provider request:
 ```
-route → extractor provider (src/masking/extractors/) : spans de texte + rôle
-      → PIIDetector.analyzeRequest (filtre scan_roles, HTTP /analyze par span, merge denylist/allowlist)
-      → masquage [[TYPE_n]] via PlaceholderContext (counters + mapping)
-      → forward provider (src/providers/<x>/client)
-      → restauration : non-stream = unmaskResponse de l'extractor ;
-                       stream = StreamRestorer + stream-transformer du provider
+route → provider extractor (src/masking/extractors/): text spans + role
+      → PIIDetector.analyzeRequest (scan_roles filter, HTTP /analyze per span, denylist/allowlist merge)
+      → [[TYPE_n]] masking via PlaceholderContext (counters + mapping)
+      → forward to provider (src/providers/<x>/client)
+      → restoration: non-stream = extractor's unmaskResponse;
+                     stream = StreamRestorer + provider stream-transformer
 ```
 [read: from src/pii/detect.ts, src/masking/*, src/providers/*]
 
-## Invariants (chacun a coûté un bug ; histoire complète dans `failure-archaeology`)
+## Invariants (each one cost a bug; full history in `failure-archaeology`)
 
-1. **Placeholders `[[TYPE_n]]` à doubles crochets, source unique `src/masking/placeholders.ts`.** L'ancien format `<TYPE_N>` était encodé en entités HTML par certains clients et devenait indémasquable (#36/#38). Le format n'est PAS configurable : l'option `redact_placeholder` a été supprimée car le streaming le hardcodait. [read: from commit d239944]
-2. **Secrets masqués AVANT la PII**, dans `/api/mask` comme dans les routes provider. Sinon la détection PII masque le `pass@host` d'une chaîne de connexion comme un email et le pattern CONNECTION_STRING ne matche plus. [read: from src/routes/api.ts, commit 08ddb1d]
-3. **Scans détecteur SÉQUENTIELS** : `analyzeRequest` boucle en for/await, jamais en `Promise.all`. L'inférence torch du détecteur est sérialisée par un verrou : paralléliser côté proxy empile les requêtes jusqu'au timeout (#135). Timeout par requête via `AbortSignal.timeout` (`detector_timeout`). [read: from src/pii/detect.ts, git show 3fe543a]
-4. **Offsets en unités de code UTF-16.** Le détecteur Python convertit ses offsets (`_utf16_mapper`) parce que le JS découpe en UTF-16 : un emoji avant un span désalignerait le masque. Tout nouveau consommateur d'offsets doit respecter cette unité. [read: from detector/detector/app.py]
-5. **Résolution de conflits d'entités en deux phases** (`src/masking/conflict-resolver.ts`, style Presidio Anonymizer) : merge des chevauchements de même type, puis élimination inter-types (contenu ou score inférieur perd). Correctif de la corruption de texte #33. [read: from commit dbb221a]
-6. **Le serveur ne démarre pas sans détecteur** : le modèle est chargé avant de servir côté Python (lifespan FastAPI), donc `/health` détecteur == prêt ; PasteGuard poll ce `/health` au boot. [read: from detector/detector/app.py, src/index.ts]
+1. **Double-bracket `[[TYPE_n]]` placeholders, single source `src/masking/placeholders.ts`.** The old `<TYPE_N>` format was HTML-entity-encoded by some clients and became impossible to unmask (#36/#38). The format is NOT configurable: the `redact_placeholder` option was removed because streaming hardcoded it. [read: from commit d239944]
+2. **Secrets are masked BEFORE PII**, both in `/api/mask` and in the provider routes. Otherwise PII detection masks the `pass@host` part of a connection string as an email and the CONNECTION_STRING pattern no longer matches. [read: from src/routes/api.ts, commit 08ddb1d]
+3. **Detector scans are SEQUENTIAL**: `analyzeRequest` loops with for/await, never `Promise.all`. The detector's torch inference is serialized by a lock: parallelizing on the proxy side queues requests up to the timeout (#135). Per-request timeout via `AbortSignal.timeout` (`detector_timeout`). [read: from src/pii/detect.ts, git show 3fe543a]
+4. **Offsets are in UTF-16 code units.** The Python detector converts its offsets (`_utf16_mapper`) because JS splits in UTF-16: an emoji before a span would misalign the mask. Any new offset consumer must respect this unit. [read: from detector/detector/app.py]
+5. **Two-phase entity conflict resolution** (`src/masking/conflict-resolver.ts`, Presidio Anonymizer style): merge overlaps of the same type, then cross-type elimination (lower content or score loses). Fix for text-corruption bug #33. [read: from commit dbb221a]
+6. **The server does not start without the detector**: the model is loaded before serving on the Python side (FastAPI lifespan), so detector `/health` == ready; PasteGuard polls this `/health` at boot. [read: from detector/detector/app.py, src/index.ts]
 
-## Contrats d'API internes
+## Internal API contracts
 
-### `POST /api/mask` (moteur local, utilisé par la campagne hooks)
+### `POST /api/mask` (local engine, used by the hooks campaign)
 
-Requête : `{text: string non vide (trimmé), startFrom?: Record<type, number>, detect?: ("pii"|"secrets")[]}`
-Réponse 200 : `{masked, context (placeholder→valeur), counters, entities: [{type, placeholder}]}`
-Erreurs : 400 validation (dont texte vide), 503 détection indisponible.
-**Chaque appel repart d'un mapping VIDE ; seuls les counters se propagent via `startFrom`.** Une même valeur vue dans deux appels reçoit deux placeholders différents : la déduplication inter-appels est à la charge du CLIENT (décision D5 de la campagne, voir `hooks-mvp-campaign`). [read: from src/routes/api.ts, plans/PLAN.md]
+Request: `{text: non-empty string (trimmed), startFrom?: Record<type, number>, detect?: ("pii"|"secrets")[]}`
+Response 200: `{masked, context (placeholder→value), counters, entities: [{type, placeholder}]}`
+Errors: 400 validation (including empty text), 503 detection unavailable.
+**Each call starts from an EMPTY mapping; only the counters propagate via `startFrom`.** The same value seen across two calls gets two different placeholders: cross-call deduplication is the CLIENT's responsibility (campaign decision D5, see `hooks-mvp-campaign`). [read: from src/routes/api.ts, plans/PLAN.md (local working notes, not committed)]
 
-### `POST /analyze` (détecteur Python)
+### `POST /analyze` (Python detector)
 
-`{text, phone_regions?, entities?, score_threshold}` → `[{entity_type, start, end, score}]`, offsets UTF-16 (invariant 4). [read: from detector/detector/app.py]
+`{text, phone_regions?, entities?, score_threshold}` → `[{entity_type, start, end, score}]`, UTF-16 offsets (invariant 4). [read: from detector/detector/app.py]
 
-## Périmètre fork (règle de territoire)
+## Fork scope (territory rule)
 
-- `src/` = code amont (sgasser/pasteguard) : y travailler uniquement pour des correctifs PR-ables upstream, en suivant les patterns route/provider/extractor existants (AGENTS.md).
-- Le travail propre au fork (hooks Claude Code) vit dans `integrations/claude-code/` (à créer au lot 2) : scripts autonomes, AUCUN import depuis `src/`, communication avec le moteur uniquement en HTTP (`/api/mask`, `/health`). Décisions D1-D3. [read: from plans/PLAN.md]
-- Ne pas modifier le moteur pour la campagne hooks (décision actée, PROGRESS.md).
+- `src/` = upstream code (sgasser/pasteguard): work here only for upstream-PR-able fixes, following the existing route/provider/extractor patterns (AGENTS.md).
+- Fork-specific work (Claude Code hooks) lives in `integrations/claude-code/` (to be created at batch 2): standalone scripts, NO imports from `src/`, communication with the engine only over HTTP (`/api/mask`, `/health`). Decisions D1-D3. [read: from plans/PLAN.md]
+- Do not modify the engine for the hooks campaign (decision recorded, PROGRESS.md).
 
-## Dashboard et logging
+## Dashboard and logging
 
-Dashboard JSX Hono (`src/views/dashboard/page.tsx`) ; logs par requête via kysely (SQLite ou Postgres) ; source trackée par header `x-pasteguard-source` (extension navigateur comptée à part, #107) ; aperçu limité aux rôles scannés (#115). [read: from src/routes/api.ts, src/logging/*]
+Hono JSX dashboard (`src/views/dashboard/page.tsx`); per-request logs via kysely (SQLite or Postgres); source tracked via the `x-pasteguard-source` header (browser extension counted separately, #107); preview limited to scanned roles (#115). [read: from src/routes/api.ts, src/logging/*]
 
-## Provenance et maintenance
+## Provenance and maintenance
 
-Rédigé le 2026-07-07 par audit complet du dépôt. Re-vérifications :
+Written on 2026-07-07 following a full repository audit. Re-checks:
 - `grep -n "for.*await\|Promise.all" src/pii/detect.ts` (invariant 3)
 - `grep -rn "\[\[" src/masking/placeholders.ts` (invariant 1)
 - `grep -n "utf16\|_utf16" detector/detector/app.py` (invariant 4)
-- `curl -s localhost:3000/api/mask -H 'content-type: application/json' -d '{"text":"test jean.dupont@example.com"}'` (contrat, services démarrés)
+- `curl -s localhost:3000/api/mask -H 'content-type: application/json' -d '{"text":"test jean.dupont@example.com"}'` (contract, services running)

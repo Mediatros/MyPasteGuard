@@ -16,9 +16,9 @@ interface FakeEngineCall {
 }
 
 /**
- * Faux moteur /api/mask reproduisant le comportement prouvé au lot 1 :
- * détection d'emails par regex, placeholders numérotés depuis startFrom,
- * AUCUNE dédup entre appels.
+ * Fake /api/mask engine reproducing the behaviour proven in batch 1:
+ * regex-based email detection, placeholders numbered from startFrom,
+ * NO de-duplication across calls.
  */
 function fakeEngine(calls?: FakeEngineCall[], latencyMs = 0): FetchLike {
   return async (_url: unknown, init?: RequestInit) => {
@@ -42,7 +42,7 @@ function fakeEngine(calls?: FakeEngineCall[], latencyMs = 0): FetchLike {
 }
 
 describe("maskText", () => {
-  test("texte vide ou blanc : aucun appel réseau", async () => {
+  test("empty or blank text: no network call", async () => {
     const dir = await tempDir();
     const calls: FakeEngineCall[] = [];
     const result = await maskText("s", "   ", {
@@ -53,7 +53,7 @@ describe("maskText", () => {
     expect(calls.length).toBe(0);
   });
 
-  test("masquage simple + fusion counters et mapping", async () => {
+  test("simple masking + counters and mapping merge", async () => {
     const dir = await tempDir();
     const result = await maskText("s", "mail: jean@exemple.fr", {
       dir,
@@ -66,7 +66,7 @@ describe("maskText", () => {
     expect(state.counters.EMAIL_ADDRESS).toBe(1);
   });
 
-  test("pré-remplacement : valeur déjà connue remplacée AVANT l'appel, valeurs imbriquées", async () => {
+  test("pre-substitution: already-known value replaced BEFORE the call, nested values", async () => {
     const dir = await tempDir();
     const state = freshState();
     state.mapping["[[PERSON_1]]"] = "Jean Dupont";
@@ -75,17 +75,17 @@ describe("maskText", () => {
     await saveState("s", state, dir);
 
     const calls: FakeEngineCall[] = [];
-    const result = await maskText("s", "Jean Dupont et Dupont sont là", {
+    const result = await maskText("s", "Jean Dupont and Dupont are here", {
       dir,
       fetchFn: fakeEngine(calls),
     });
-    // « Jean Dupont » (plus long) remplacé d'abord, puis « Dupont » seul.
-    expect(calls[0]?.text).toBe("[[PERSON_1]] et [[PERSON_2]] sont là");
-    expect(result.masked).toBe("[[PERSON_1]] et [[PERSON_2]] sont là");
+    // "Jean Dupont" (longer) replaced first, then "Dupont" alone.
+    expect(calls[0]?.text).toBe("[[PERSON_1]] and [[PERSON_2]] are here");
+    expect(result.masked).toBe("[[PERSON_1]] and [[PERSON_2]] are here");
     expect(result.changed).toBe(true);
   });
 
-  test("startFrom envoyé = counters de session", async () => {
+  test("startFrom sent = session counters", async () => {
     const dir = await tempDir();
     const state = freshState();
     state.counters.EMAIL_ADDRESS = 4;
@@ -99,11 +99,11 @@ describe("maskText", () => {
     expect((await loadState("s", dir)).counters.EMAIL_ADDRESS).toBe(5);
   });
 
-  test("dédup passe b : variante détectée d'une valeur déjà mappée → placeholder existant réutilisé", async () => {
+  test("de-duplication pass B: detected variant of an already-mapped value → existing placeholder reused", async () => {
     const dir = await tempDir();
     const state = freshState();
-    // Valeur déjà connue sous un placeholder, mais introuvable par le
-    // pré-remplacement exact (on simule via un faux moteur qui la re-détecte).
+    // Value already known under a placeholder, but not found by the exact
+    // pre-substitution step (simulated via a fake engine that re-detects it).
     state.mapping["[[EMAIL_ADDRESS_1]]"] = "jean@exemple.fr";
     state.counters.EMAIL_ADDRESS = 1;
     await saveState("s", state, dir);
@@ -128,14 +128,14 @@ describe("maskText", () => {
     expect(after.mapping["[[EMAIL_ADDRESS_2]]"]).toBeUndefined();
   });
 
-  test("placeholder re-détecté comme entité → masquage annulé, pas de poupée russe (bug E2E lot 4)", async () => {
+  test("placeholder re-detected as an entity → masking cancelled, no nested-placeholder bug (E2E bug batch 4)", async () => {
     const dir = await tempDir();
     const state = freshState();
     state.mapping["[[PERSON_2]]"] = "Sarah Connor";
     state.counters.PERSON = 2;
     await saveState("s", state, dir);
 
-    // GLiNER voit « [[PERSON_2]] » (issu du pré-remplacement) comme une personne.
+    // GLiNER sees "[[PERSON_2]]" (from pre-substitution) as a person.
     const engine: FetchLike = async () =>
       new Response(
         JSON.stringify({
@@ -158,7 +158,7 @@ describe("maskText", () => {
     expect(after.mapping["[[PERSON_2]]"]).toBe("Sarah Connor");
   });
 
-  test("idempotence (R14) : un texte déjà masqué ressort intact", async () => {
+  test("idempotence (R14): an already-masked text comes out unchanged", async () => {
     const dir = await tempDir();
     const state = freshState();
     state.mapping["[[EMAIL_ADDRESS_1]]"] = "jean@exemple.fr";
@@ -173,7 +173,7 @@ describe("maskText", () => {
     expect(result.changed).toBe(false);
   });
 
-  test("erreur réseau → MaskUnavailableError, état inchangé", async () => {
+  test("network error → MaskUnavailableError, state unchanged", async () => {
     const dir = await tempDir();
     const failing: FetchLike = async () => {
       throw new Error("ECONNREFUSED");
@@ -184,7 +184,7 @@ describe("maskText", () => {
     expect(await loadState("s", dir)).toEqual(freshState());
   });
 
-  test("HTTP non-200 → MaskUnavailableError", async () => {
+  test("non-200 HTTP → MaskUnavailableError", async () => {
     const dir = await tempDir();
     const engine503: FetchLike = async () => new Response("busy", { status: 503 });
     await expect(maskText("s", "texte", { dir, fetchFn: engine503 })).rejects.toBeInstanceOf(
@@ -193,8 +193,8 @@ describe("maskText", () => {
   });
 });
 
-describe("concurrence bout en bout", () => {
-  test("10 maskText parallèles : une valeur = un placeholder, aucun doublon", async () => {
+describe("end-to-end concurrency", () => {
+  test("10 parallel maskText calls: one value = one placeholder, no duplicates", async () => {
     const dir = await tempDir();
     const shared = "commun@exemple.fr";
     const texts = Array.from(
@@ -207,12 +207,12 @@ describe("concurrence bout en bout", () => {
     );
 
     const state = await loadState("s", dir);
-    // Une valeur n'apparaît que sous UN placeholder.
+    // A value appears under only ONE placeholder.
     const values = Object.values(state.mapping);
     expect(new Set(values).size).toBe(values.length);
-    // 11 valeurs distinctes attendues (1 commune + 10 perso).
+    // 11 distinct values expected (1 shared + 10 personal).
     expect(values.length).toBe(11);
-    // La valeur commune porte le même placeholder dans toutes les sorties.
+    // The shared value carries the same placeholder across all outputs.
     const sharedPlaceholder = Object.entries(state.mapping).find(([, v]) => v === shared)?.[0];
     expect(sharedPlaceholder).toBeDefined();
     for (const result of results) {

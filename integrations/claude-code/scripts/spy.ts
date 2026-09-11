@@ -1,8 +1,8 @@
 /**
- * Hook espion (lot 3 phase A) : logge le payload stdin COMPLET de chaque
- * événement hook dans ~/.pasteguard/spy.jsonl puis sort en 0 sans rien
- * modifier. Sert à lever V1 (forme réelle de tool_response par outil) et à
- * préparer V5/V6/V7. Ne jamais brancher hors d'un projet de test.
+ * Spy hook (batch 3 phase A): logs the FULL stdin payload of every hook
+ * event to ~/.pasteguard/spy.jsonl then exits 0 without modifying anything.
+ * Used to resolve V1 (real shape of tool_response per tool) and to prepare
+ * V5/V6/V7. Never wire this outside a test project.
  */
 import { appendFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -25,6 +25,6 @@ try {
   });
   await appendFile(join(dir, "spy.jsonl"), `${line}\n`, { mode: 0o600 });
 } catch {
-  // Un espion ne casse jamais la session : silence total.
+  // A spy never breaks the session: total silence.
 }
 process.exit(0);

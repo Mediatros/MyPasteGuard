@@ -1,74 +1,74 @@
 ---
 name: validation-and-qa
-description: Ce qui compte comme preuve dans PasteGuard — commandes de test/typecheck/lint avec leurs états attendus exacts, jobs CI, benchmark de précision PII, comment ajouter des tests. À charger avant de déclarer un travail « terminé », après toute modification de code, ou quand la CI échoue.
+description: What counts as evidence in PasteGuard — test/typecheck/lint commands with their exact expected states, CI jobs, PII precision benchmark, how to add tests. Load before declaring work "done", after any code change, or when CI fails.
 ---
 
-# Validation et QA — PasteGuard
+# Validation and QA — PasteGuard
 
-Règle de la maison : rien n'est « fait » sans commande exécutée et sortie observée. « Ça devrait marcher » n'est pas un état.
+House rule: nothing is "done" without an executed command and observed output. "It should work" is not a state.
 
-## Quand NE PAS utiliser cette skill
+## When NOT to use this skill
 
-- Pour les règles de commit et les territoires → skill `change-control`.
-- Pour diagnostiquer un test qui échoue bizarrement → skill `debugging-playbook`.
+- For commit rules and territories → skill `change-control`.
+- To diagnose a test failing strangely → skill `debugging-playbook`.
 
-## Le triptyque obligatoire avant livraison
+## The mandatory triptych before delivery
 
 ```bash
 bun test && bun run typecheck && bun run check
 ```
 
-États attendus (mesurés le 2026-07-07 sur la branche `fix/claude-code-transparency`, arbre modifié inclus) [verified: executed] :
+Expected states (measured on 2026-07-07 on branch `fix/claude-code-transparency`, including the modified working tree) [verified: executed]:
 
-| Commande | Attendu |
+| Command | Expected |
 |---|---|
-| `bun test` | **430 pass, 1 skip, 0 fail** — 431 tests, 31 fichiers, ~300 ms. Le seul skip est « Logger Postgres backend … against Postgres » (exige un Postgres réel). |
-| `bun run typecheck` | exit 0, aucune sortie d'erreur |
+| `bun test` | **430 pass, 1 skip, 0 fail** — 431 tests, 31 files, ~300 ms. The only skip is "Logger Postgres backend … against Postgres" (requires a real Postgres). |
+| `bun run typecheck` | exit 0, no error output |
 | `bun run typecheck:benchmarks` | exit 0 |
-| `bun run check` | « Checked 83 files … No fixes applied. » |
+| `bun run check` | "Checked 83 files … No fixes applied." |
 
-Si `bun test` affiche plus d'un skip ou le moindre fail : le travail n'est pas livrable. Si le hook de formatage global affiche des erreurs Prettier/ESLint, c'est du bruit — voir `debugging-playbook`.
+If `bun test` shows more than one skip or any fail at all: the work is not deliverable. If the global formatting hook shows Prettier/ESLint errors, that's noise — see `debugging-playbook`.
 
-## CI GitHub (`.github/workflows/ci.yml`, push et PR sur main)
+## GitHub CI (`.github/workflows/ci.yml`, push and PR on main)
 
-| Job | Étapes |
+| Job | Steps |
 |---|---|
 | `test` | `bun install --frozen-lockfile` → typecheck → typecheck:benchmarks → check → bun test |
-| `detector` | Python 3.11 venv → torch CPU → `ruff check .` → `ruff format . --check` → `pyright` → `pytest -q` (dans `detector/`) |
-| `docker-build` | build de l'image all-in-one `docker/Dockerfile` |
+| `detector` | Python 3.11 venv → torch CPU → `ruff check .` → `ruff format . --check` → `pyright` → `pytest -q` (in `detector/`) |
+| `docker-build` | build of the all-in-one image `docker/Dockerfile` |
 
 [read: from .github/workflows/ci.yml]
 
-Les tests Python du détecteur n'ont PAS été exécutés localement (pas de venv présent) ; seule la CI les garantit. Pour les lancer localement, reproduire les étapes du job `detector`. [inferred: unconfirmed localement]
+The detector's Python tests were NOT run locally (no venv present); only CI guarantees them. To run them locally, reproduce the `detector` job's steps. [inferred: unconfirmed locally]
 
-Release : sur tag `v*`, build multi-arch (amd64+arm64) poussé vers ghcr.io `:latest` et `:<version>` (`release.yml`). `.github/secret_scanning.yml` exclut `src/**/*.test.ts` du secret scanning (faux secrets volontaires dans les tests, #31) — ne pas « corriger » cette exclusion. [read: from .github/workflows/release.yml, .github/secret_scanning.yml]
+Release: on tag `v*`, multi-arch build (amd64+arm64) pushed to ghcr.io `:latest` and `:<version>` (`release.yml`). `.github/secret_scanning.yml` excludes `src/**/*.test.ts` from secret scanning (deliberate fake secrets in the tests, #31) — do not "fix" this exclusion. [read: from .github/workflows/release.yml, .github/secret_scanning.yml]
 
-## Benchmark de précision PII
+## PII precision benchmark
 
 ```bash
-bun run benchmark:accuracy   # nécessite le détecteur démarré (voir build-and-env)
-# filtres : --suite core|precision|eval|hard, --languages fr,en, --url <detector>, --verbose
+bun run benchmark:accuracy   # requires the detector to be running (see build-and-env)
+# filters: --suite core|precision|eval|hard, --languages fr,en, --url <detector>, --verbose
 ```
 
-- Corpus YAML en 9 langues (en, de, es, fr, it, nl, pl, pt, ro), `benchmarks/pii-accuracy/test-data/`.
-- Suites `core` et `precision` sont GATING (échec = échec du run) ; `eval` et `hard` sont report-only (overridable par cas via `gate`).
-- Le runner valide strictement le corpus : champ inconnu, langue/entité non supportée, ID dupliqué, texte attendu absent → échec.
-- Modes de match : `exact`, `contains` (±2 caractères), `overlap` (cas volontairement lâches). Les cas encodent le comportement VOULU, pas ce que le détecteur actuel réussit.
-[read: from benchmarks/pii-accuracy/README.md] [inferred: unconfirmed — non exécuté le 2026-07-07, détecteur arrêté]
+- YAML corpus in 9 languages (en, de, es, fr, it, nl, pl, pt, ro), `benchmarks/pii-accuracy/test-data/`.
+- The `core` and `precision` suites are GATING (failure = run failure); `eval` and `hard` are report-only (overridable per case via `gate`).
+- The runner strictly validates the corpus: unknown field, unsupported language/entity, duplicate ID, missing expected text → failure.
+- Match modes: `exact`, `contains` (±2 characters), `overlap` (deliberately loose cases). The cases encode the INTENDED behavior, not what the current detector actually achieves.
+[read: from benchmarks/pii-accuracy/README.md] [inferred: unconfirmed — not run on 2026-07-07, detector stopped]
 
-⚠️ Le README du benchmark cite `http://localhost:3000/analyze` comme cible par défaut alors que le détecteur écoute sur 5002 ; vérifier la valeur réelle dans `benchmarks/pii-accuracy/run.ts` avant usage. [read: from benchmarks/pii-accuracy/README.md] [inferred: unconfirmed]
+⚠️ The benchmark README cites `http://localhost:3000/analyze` as the default target, but the detector listens on 5002; check the actual value in `benchmarks/pii-accuracy/run.ts` before use. [read: from benchmarks/pii-accuracy/README.md] [inferred: unconfirmed]
 
-Tout changement de floor GLiNER ou de seuil DOIT être justifié par un run de benchmark avant/après, pas à l'œil (voir `domain-reference`).
+Any change to a GLiNER floor or threshold MUST be justified by a before/after benchmark run, not by eyeballing it (see `domain-reference`).
 
-## Ajouter des tests
+## Adding tests
 
-- Tests colocalisés : `<module>.test.ts` à côté du module (31 fichiers existants comme modèles).
-- Obligatoires pour : masking, forwarding, logging, config, endpoints publics (AGENTS.md, voir `change-control`).
-- Piège d'isolation des mocks entre fichiers de tests de routes : voir `debugging-playbook`.
-- Utilitaires partagés : `src/test-utils/detection-results.ts`.
+- Colocated tests: `<module>.test.ts` next to the module (31 existing files as models).
+- Mandatory for: masking, forwarding, logging, config, public endpoints (AGENTS.md, see `change-control`).
+- Mock isolation pitfall between route test files: see `debugging-playbook`.
+- Shared utilities: `src/test-utils/detection-results.ts`.
 
-## Provenance et maintenance
+## Provenance and maintenance
 
-Rédigé le 2026-07-07 par audit complet du dépôt. Re-vérifications :
-- `bun test 2>&1 | tail -5` (compte de référence à re-dater si il évolue)
-- `grep -n "url" benchmarks/pii-accuracy/run.ts | head -5` (lever l'incertitude sur la cible par défaut)
+Written on 2026-07-07 from a full repository audit. Re-checks:
+- `bun test 2>&1 | tail -5` (reference count to re-date if it changes)
+- `grep -n "url" benchmarks/pii-accuracy/run.ts | head -5` (resolve the uncertainty about the default target)

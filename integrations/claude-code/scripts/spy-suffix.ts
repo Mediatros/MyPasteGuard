@@ -1,10 +1,10 @@
 /**
- * POC V5 (lot 3 phase A) : vérifie que hookSpecificOutput.updatedToolOutput
- * est honoré par la version installée de Claude Code.
- * DÉCOUVERTE (binaire 2.1.215) : updatedToolOutput doit reproduire la FORME du
- * tool_response de l'outil (validation « does not match tool's output shape »),
- * ce n'est PAS une string. Pour Read : { type, file: { content, ... } }.
- * Ne jamais brancher hors d'un projet de test.
+ * POC V5 (batch 3 phase A): checks that hookSpecificOutput.updatedToolOutput
+ * is honored by the installed version of Claude Code.
+ * FINDING (binary 2.1.215): updatedToolOutput must reproduce the SHAPE of
+ * the tool's tool_response (validation "does not match tool's output
+ * shape"), it is NOT a string. For Read: { type, file: { content, ... } }.
+ * Never wire this outside a test project.
  */
 export {};
 

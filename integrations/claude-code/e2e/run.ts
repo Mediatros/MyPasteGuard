@@ -1,19 +1,19 @@
 #!/usr/bin/env bun
 /**
- * Harnais E2E lot 7 (plans/07-e2e.md, plans/11-deploiement.md §7) : lance des
- * scénarios `claude -p` headless dans `pasteguard-test/`, puis vérifie qu'AUCUNE
- * valeur des fixtures n'apparaît, littéralement, dans le transcript JSONL complet
- * de la session. Critère binaire par valeur : zéro occurrence.
+ * E2E harness batch 7 (plans/07-e2e.md, plans/11-deploiement.md §7): runs
+ * headless `claude -p` scenarios in `pasteguard-test/`, then checks that NO
+ * fixture value appears, literally, in the session's full JSONL transcript.
+ * Binary criterion per value: zero occurrences.
  *
- * Ne remplace PAS le protocole mitmproxy (S11/S12, manuel, voir README.md) : ce
- * harnais observe le transcript LOCAL, pas le fil réseau réel.
+ * Does NOT replace the mitmproxy protocol (S11/S12, manual, see README.md):
+ * this harness observes the LOCAL transcript, not the real network wire.
  *
- * Usage :
+ * Usage:
  *   bun run integrations/claude-code/e2e/run.ts [--only S1,S3] [--dry-run]
  *
- * Sortie : tableau scénario / VERT-ROUGE / preuve sur stdout, rapport JSON dans
- * e2e/resultats/<horodatage>.json. Code de sortie non nul si un scénario est ROUGE
- * (ou si le harnais lui-même échoue à conclure sur un scénario).
+ * Output: scenario / GREEN-RED / evidence table on stdout, JSON report in
+ * e2e/results/<timestamp>.json. Non-zero exit code if a scenario is RED (or
+ * if the harness itself fails to reach a conclusion on a scenario).
  */
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
@@ -28,13 +28,13 @@ const CLAUDE_BIN = process.env.CLAUDE_BIN ?? "claude";
 const DEFAULT_MODEL = "haiku";
 const DEFAULT_TIMEOUT_MS = 120_000;
 const E2E_DIR = import.meta.dir;
-const VALUES_FILE = join(E2E_DIR, "valeurs-sensibles.txt");
-const RESULTS_DIR = join(E2E_DIR, "resultats");
+const VALUES_FILE = join(E2E_DIR, "sensitive-values.txt");
+const RESULTS_DIR = join(E2E_DIR, "results");
 
 /**
- * Purge d'environnement EXACTE (PROGRESS.md, recette de test headless) : sans
- * elle, la clé API d'une éventuelle session parente écrase l'OAuth abonnement
- * et l'appel échoue en 401.
+ * EXACT environment purge (PROGRESS.md, headless test recipe): without it,
+ * the API key of a possible parent session overrides the subscription OAuth
+ * and the call fails with a 401.
  */
 const ENV_TO_UNSET = [
   "ANTHROPIC_API_KEY",
@@ -90,16 +90,16 @@ interface Scenario {
   maxTurns: number;
   model?: string;
   timeoutMs?: number;
-  /** Chemins relatifs à pasteguard-test/ que le scénario peut créer/modifier : sauvegardés puis restaurés. */
+  /** Paths relative to pasteguard-test/ that the scenario may create/modify: saved then restored. */
   filesToRestore?: string[];
-  /** Vérifications spécifiques en plus du grep générique zéro-fuite (plans/07, plans/11 §7.2). */
+  /** Checks specific to this scenario, in addition to the generic zero-leak grep (plans/07, plans/11 §7.2). */
   extraChecks?: (ctx: ScenarioContext) => Promise<CheckResult[]>;
 }
 
 interface ScenarioReport {
   id: string;
   description: string;
-  status: "VERT" | "ROUGE";
+  status: "GREEN" | "RED";
   durationMs: number;
   sessionId: string | null;
   transcriptPath: string | null;
@@ -110,14 +110,14 @@ interface ScenarioReport {
 }
 
 // ---------------------------------------------------------------------------
-// Utilitaires génériques
+// Generic utilities
 // ---------------------------------------------------------------------------
 
 async function loadSensitiveValues(): Promise<string[]> {
   if (!existsSync(VALUES_FILE)) {
     throw new Error(
-      `Fichier de valeurs sensibles manquant : ${VALUES_FILE}. ` +
-        "Lancer d'abord `bun run integrations/claude-code/e2e/build-valeurs-sensibles.ts`.",
+      `Missing sensitive values file: ${VALUES_FILE}. ` +
+        "Run `bun run integrations/claude-code/e2e/build-sensitive-values.ts` first.",
     );
   }
   const raw = await readFile(VALUES_FILE, "utf8");
@@ -133,14 +133,14 @@ interface PromptGuardViolation {
 }
 
 /**
- * Garde structurelle (pas cosmétique) : un prompt de scénario ne doit JAMAIS
- * nommer littéralement une valeur sensible des fixtures. Sinon le modèle voit
- * la valeur en clair dans son propre prompt (elle part donc, de toute façon,
- * dès le premier tour) ET ne peut pas la corréler avec le placeholder qu'il
- * voit dans les fichiers masqués (limite UX structurelle, fait 17 de
- * PROGRESS.md) : le scénario échoue fonctionnellement (l'outil visé n'est
- * jamais appelé) en plus de fausser le check zéro-fuite. Désigner l'entité
- * STRUCTURELLEMENT (« le premier client », « la deuxième adresse email »...).
+ * Structural guard (not cosmetic): a scenario prompt must NEVER literally
+ * name a fixture's sensitive value. Otherwise the model sees the value in
+ * the clear in its own prompt (so it goes out anyway, from the very first
+ * turn) AND cannot correlate it with the placeholder it sees in the masked
+ * files (structural UX limitation, fact 17 of PROGRESS.md): the scenario
+ * fails functionally (the targeted tool is never called) on top of skewing
+ * the zero-leak check. Designate the entity STRUCTURALLY ("the first
+ * client", "the second email address"...).
  */
 function checkPromptsAgainstSensitiveValues(
   scenarios: Scenario[],
@@ -174,7 +174,7 @@ function wasToolUsed(transcriptRaw: string | null, toolName: string): boolean {
         }
       }
     } catch {
-      // Ligne JSONL non parseable isolément : ignorer, ce n'est pas le check qui échoue pour ça.
+      // JSONL line not parseable in isolation: ignore, this isn't what makes the check fail.
     }
   }
   return false;
@@ -200,7 +200,7 @@ async function restoreFile(relPath: string, snapshot: FileSnapshot): Promise<voi
 }
 
 // ---------------------------------------------------------------------------
-// Exécution CLI et repérage du transcript
+// CLI execution and transcript resolution
 // ---------------------------------------------------------------------------
 
 function buildArgs(scenario: Scenario): string[] {
@@ -218,7 +218,7 @@ function buildArgs(scenario: Scenario): string[] {
   ];
 }
 
-/** Reproduit la commande `env -u X -u Y ... claude ...` pour affichage (--dry-run) et logs. */
+/** Reproduces the `env -u X -u Y ... claude ...` command for display (--dry-run) and logs. */
 function formatCommandForDisplay(scenario: Scenario): string {
   const unsets = ENV_TO_UNSET.map((k) => `-u ${k}`).join(" ");
   const args = buildArgs(scenario)
@@ -263,17 +263,17 @@ async function runClaude(scenario: Scenario): Promise<CliResult> {
     const parsed = JSON.parse(stdout) as { session_id?: unknown };
     if (typeof parsed.session_id === "string") sessionIdFromJson = parsed.session_id;
   } catch {
-    // --output-format json peut échouer à produire du JSON pur (erreur avant sortie propre,
-    // timeout tué en plein flux...) : repli sur le fichier .jsonl le plus récent ci-dessous.
+    // --output-format json can fail to produce pure JSON (error before clean output,
+    // timeout killed mid-stream...): fall back to the most recent .jsonl file below.
   }
 
   return { exitCode, stdout, stderr, durationMs, timedOut, sessionIdFromJson };
 }
 
 /**
- * Identifie le transcript de la session : priorité au `session_id` renvoyé par
- * `--output-format json` (fiable), repli sur le fichier `.jsonl` le plus
- * récemment modifié dans le répertoire de projet, créé après le lancement.
+ * Identifies the session's transcript: priority to the `session_id` returned
+ * by `--output-format json` (reliable), fallback to the most recently
+ * modified `.jsonl` file in the project directory, created after launch.
  */
 async function resolveTranscriptPath(cli: CliResult, launchedAt: number): Promise<string | null> {
   if (cli.sessionIdFromJson) {
@@ -287,7 +287,7 @@ async function resolveTranscriptPath(cli: CliResult, launchedAt: number): Promis
       if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
       const p = join(TRANSCRIPTS_DIR, entry.name);
       const s = await stat(p);
-      // Marge de 2s : horloge du process vs mtime du fichier.
+      // 2s margin: process clock vs file mtime.
       if (s.mtimeMs >= launchedAt - 2000 && (!best || s.mtimeMs > best.mtimeMs)) {
         best = { path: p, mtimeMs: s.mtimeMs };
       }
@@ -299,7 +299,7 @@ async function resolveTranscriptPath(cli: CliResult, launchedAt: number): Promis
 }
 
 // ---------------------------------------------------------------------------
-// Check générique : zéro-fuite dans le transcript JSONL complet
+// Generic check: zero leak in the full JSONL transcript
 // ---------------------------------------------------------------------------
 
 interface LeakOccurrence {
@@ -316,25 +316,26 @@ function truncateValue(value: string): string {
 }
 
 /**
- * Grep littéral (pas regex) de chaque valeur sensible dans CHAQUE ligne du
- * transcript. Classification par occurrence, PRIORITÉ à la catégorie prompt :
+ * Literal grep (not regex) of each sensitive value in EVERY line of the
+ * transcript. Classification per occurrence, PRIORITY to the prompt
+ * category:
  *
- * - « prompt utilisateur » : la valeur apparaît dans le prompt même du
- *   scénario (`scenario.prompt`). Couvre à la fois les entrées qui portent le
- *   prompt tel quel (`user`, `queue-operation`, `last-prompt` observées en
- *   réel) et toute citation littérale de cette valeur par l'assistant : si la
- *   valeur était déjà en clair dès le tour 0 (le prompt tapé), CE N'EST PAS
- *   une nouvelle fuite de masquage — c'est la limitation structurelle n°1 du
- *   projet (fait 17, PROGRESS.md : le prompt tapé part toujours en clair).
- *   Ne fait PAS échouer le scénario ; compté et rapporté à part. La garde
- *   `checkPromptsAgainstSensitiveValues` empêche déjà qu'un scénario de ce
- *   harnais tombe dans ce cas — cette catégorie protège contre un prompt
- *   futur qui nommerait une entité par erreur.
- * - « attachment » (fait 16) : stdout de hook consigné en clair localement,
- *   pas un envoi réseau.
- * - « CONTENU message » (`user`/`assistant`, hors prompt) : potentiellement
- *   parti vers l'API — fait échouer le scénario.
- * - « ailleurs » : à examiner au cas par cas — fait échouer le scénario.
+ * - "user prompt": the value appears in the scenario's own prompt
+ *   (`scenario.prompt`). Covers both the entries that carry the prompt as-is
+ *   (`user`, `queue-operation`, `last-prompt` observed in practice) and any
+ *   literal quoting of this value by the assistant: if the value was already
+ *   in the clear from turn 0 (the typed prompt), THIS IS NOT a new masking
+ *   leak, it's the project's structural limitation #1 (fact 17, PROGRESS.md:
+ *   the typed prompt always goes out in the clear). Does NOT fail the
+ *   scenario; counted and reported separately. The
+ *   `checkPromptsAgainstSensitiveValues` guard already prevents a scenario of
+ *   this harness from falling into this case; this category protects
+ *   against a future prompt that would name an entity by mistake.
+ * - "attachment" (fact 16): hook stdout logged locally in the clear, not a
+ *   network send.
+ * - "message CONTENT" (`user`/`assistant`, outside the prompt): potentially
+ *   sent to the API, fails the scenario.
+ * - "elsewhere": to be examined case by case, fails the scenario.
  */
 function checkZeroLeak(transcriptRaw: string, values: string[], prompt: string): CheckResult {
   const lines = transcriptRaw.split("\n").filter((l) => l.length > 0);
@@ -390,28 +391,28 @@ function checkZeroLeak(transcriptRaw: string, values: string[], prompt: string):
         : "";
     return {
       ok: true,
-      label: "zéro-fuite transcript",
-      detail: `0 occurrence hors prompt sur ${values.length} valeurs testées${note}`,
+      label: "transcript zero-leak",
+      detail: `0 occurrence outside prompt across ${values.length} tested value(s)${note}`,
     };
   }
 
   const detail = failing
     .map((o) => {
       const parts: string[] = [];
-      if (o.contentHits > 0) parts.push(`${o.contentHits}× en CONTENU message (fuite potentielle)`);
+      if (o.contentHits > 0) parts.push(`${o.contentHits}x in message CONTENT (potential leak)`);
       if (o.attachmentHits > 0)
-        parts.push(`${o.attachmentHits}× en attachment hook local (fait 16, pas réseau)`);
-      if (o.otherHits > 0) parts.push(`${o.otherHits}× ailleurs (à examiner)`);
-      if (o.promptHits > 0) parts.push(`${o.promptHits}× dans le prompt (hors critère)`);
-      return `"${truncateValue(o.value)}" ×${o.count} (${parts.join(", ")})`;
+        parts.push(`${o.attachmentHits}x in local hook attachment (fact 16, not network)`);
+      if (o.otherHits > 0) parts.push(`${o.otherHits}x elsewhere (to examine)`);
+      if (o.promptHits > 0) parts.push(`${o.promptHits}x in the prompt (out of scope)`);
+      return `"${truncateValue(o.value)}" x${o.count} (${parts.join(", ")})`;
     })
     .join(" ; ");
 
-  return { ok: false, label: "zéro-fuite transcript", detail };
+  return { ok: false, label: "transcript zero-leak", detail };
 }
 
 // ---------------------------------------------------------------------------
-// Checks spécifiques par scénario (session store)
+// Scenario-specific checks (session store)
 // ---------------------------------------------------------------------------
 
 async function loadSessionState(sessionId: string): Promise<SessionState | null> {
@@ -424,14 +425,14 @@ async function loadSessionState(sessionId: string): Promise<SessionState | null>
   }
 }
 
-/** S6 : aucune valeur ne doit être mappée sous deux placeholders différents (dédup D5). */
+/** S6: no value must be mapped under two different placeholders (dedup D5). */
 async function checkMappingInjective(sessionId: string): Promise<CheckResult> {
   const state = await loadSessionState(sessionId);
   if (!state) {
     return {
       ok: false,
-      label: "cohérence store (dédup)",
-      detail: `store introuvable pour la session ${sessionId} (${join(sessionsDir(), `${sessionId}.json`)})`,
+      label: "store consistency (dedup)",
+      detail: `store not found for session ${sessionId} (${join(sessionsDir(), `${sessionId}.json`)})`,
     };
   }
   const byValue = new Map<string, string[]>();
@@ -444,21 +445,21 @@ async function checkMappingInjective(sessionId: string): Promise<CheckResult> {
   if (collisions.length === 0) {
     return {
       ok: true,
-      label: "cohérence store (dédup)",
-      detail: `${Object.keys(state.mapping).length} entrée(s) mapping, toutes injectives`,
+      label: "store consistency (dedup)",
+      detail: `${Object.keys(state.mapping).length} mapping entry(ies), all injective`,
     };
   }
   const detail = collisions
-    .map(([value, placeholders]) => `"${value.slice(0, 30)}" → ${placeholders.join(", ")}`)
+    .map(([value, placeholders]) => `"${value.slice(0, 30)}" -> ${placeholders.join(", ")}`)
     .join(" ; ");
   return {
     ok: false,
-    label: "cohérence store (dédup)",
-    detail: `collision(s) : ${detail}`,
+    label: "store consistency (dedup)",
+    detail: `collision(s): ${detail}`,
   };
 }
 
-/** Le store ne doit pas avoir été mis de côté comme corrompu pendant/après le scénario (S14, verrou concurrent). */
+/** The store must not have been set aside as corrupted during/after the scenario (S14, concurrent lock). */
 async function checkStoreNotCorrupted(sessionId: string): Promise<CheckResult> {
   const dir = sessionsDir();
   try {
@@ -467,64 +468,64 @@ async function checkStoreNotCorrupted(sessionId: string): Promise<CheckResult> {
     if (corrupt.length === 0) {
       return {
         ok: true,
-        label: "intégrité store",
-        detail: "aucun fichier .corrupt-* pour cette session",
+        label: "store integrity",
+        detail: "no .corrupt-* file for this session",
       };
     }
     return {
       ok: false,
-      label: "intégrité store",
-      detail: `fichier(s) corrompu(s) détecté(s) : ${corrupt.join(", ")}`,
+      label: "store integrity",
+      detail: `corrupted file(s) detected: ${corrupt.join(", ")}`,
     };
   } catch (err) {
     return {
       ok: false,
-      label: "intégrité store",
-      detail: `répertoire store illisible : ${err instanceof Error ? err.message : String(err)}`,
+      label: "store integrity",
+      detail: `store directory unreadable: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Table de scénarios (S1-S6, S14 — plans/07-e2e.md, plans/11-deploiement.md §7.2)
+// Scenario table (S1-S6, S14 - plans/07-e2e.md, plans/11-deploiement.md §7.2)
 // ---------------------------------------------------------------------------
 
 const SCENARIOS: Scenario[] = [
   {
     id: "S1",
-    description: "Read fixtures/clients.txt et résumé des clients",
+    description: "Read fixtures/clients.txt and summarize the clients",
     prompt:
-      "Lis fixtures/clients.txt et résume qui sont les clients (uniquement leurs noms, pas d'autre détail).",
+      "Read fixtures/clients.txt and summarize who the clients are (only their names, no other detail).",
     allowedTools: "Read",
     maxTurns: 4,
     extraChecks: async (ctx) => [
       {
         ok: wasToolUsed(ctx.transcriptRaw, "Read"),
-        label: "outil Read utilisé",
-        detail: wasToolUsed(ctx.transcriptRaw, "Read") ? "confirmé" : "aucun tool_use Read trouvé",
+        label: "Read tool used",
+        detail: wasToolUsed(ctx.transcriptRaw, "Read") ? "confirmed" : "no Read tool_use found",
       },
     ],
   },
   {
     id: "S2",
     description: "cat fixtures/env.fake via Bash (secrets)",
-    prompt: 'Utilise Bash pour exécuter "cat fixtures/env.fake" et montre-moi le contenu.',
+    prompt: 'Use Bash to run "cat fixtures/env.fake" and show me the content.',
     allowedTools: "Bash",
     maxTurns: 4,
     extraChecks: async (ctx) => [
       {
         ok: wasToolUsed(ctx.transcriptRaw, "Bash"),
-        label: "outil Bash utilisé",
-        detail: wasToolUsed(ctx.transcriptRaw, "Bash") ? "confirmé" : "aucun tool_use Bash trouvé",
+        label: "Bash tool used",
+        detail: wasToolUsed(ctx.transcriptRaw, "Bash") ? "confirmed" : "no Bash tool_use found",
       },
     ],
   },
   {
     id: "S3",
-    description: "Edit : remplacer l'email du premier client (fixtures/clients.txt)",
+    description: "Edit: replace the first client's email (fixtures/clients.txt)",
     prompt:
-      "Dans fixtures/clients.txt, remplace uniquement l'adresse email du premier client " +
-      "listé par contact@example.org, sans toucher au reste du fichier.",
+      "In fixtures/clients.txt, replace only the email address of the first listed " +
+      "client with contact@example.org, without touching the rest of the file.",
     allowedTools: "Read,Edit,Bash",
     maxTurns: 6,
     filesToRestore: ["fixtures/clients.txt"],
@@ -534,26 +535,26 @@ const SCENARIOS: Scenario[] = [
       try {
         content = await readFile(p, "utf8");
       } catch {
-        // fichier illisible : le check ci-dessous échouera avec content vide
+        // unreadable file: the check below will fail with empty content
       }
       const ok = content.includes("contact@example.org");
       return [
         {
           ok,
-          label: "disque : vraie valeur écrite",
+          label: "disk: real value written",
           detail: ok
-            ? "fixtures/clients.txt contient bien contact@example.org"
-            : "contact@example.org absent de fixtures/clients.txt après le scénario",
+            ? "fixtures/clients.txt does contain contact@example.org"
+            : "contact@example.org missing from fixtures/clients.txt after the scenario",
         },
       ];
     },
   },
   {
     id: "S4",
-    description: "Write : créer note.md avec le téléphone du premier client",
+    description: "Write: create note.md with the first client's phone number",
     prompt:
-      "Crée un fichier note.md à la racine du projet contenant uniquement le numéro de téléphone " +
-      "du premier client listé dans fixtures/clients.txt, une seule ligne, rien d'autre.",
+      "Create a note.md file at the project root containing only the phone number " +
+      "of the first client listed in fixtures/clients.txt, a single line, nothing else.",
     allowedTools: "Read,Write",
     maxTurns: 5,
     filesToRestore: ["note.md"],
@@ -563,60 +564,58 @@ const SCENARIOS: Scenario[] = [
       try {
         content = await readFile(p, "utf8");
       } catch {
-        // fichier absent : le check ci-dessous échouera avec content vide
+        // missing file: the check below will fail with empty content
       }
       const ok = content.includes("06 12 34 56 78");
       return [
         {
           ok,
-          label: "disque : vraie valeur écrite",
+          label: "disk: real value written",
           detail: ok
-            ? "note.md contient bien le vrai numéro de téléphone"
-            : "le vrai numéro de téléphone est absent de note.md après le scénario",
+            ? "note.md does contain the real phone number"
+            : "the real phone number is missing from note.md after the scenario",
         },
       ];
     },
   },
   {
     id: "S5",
-    description:
-      "Bash grep : rechercher l'email du premier contact dans fixtures/ (démasquage Bash)",
+    description: "Bash grep: search for the first contact's email in fixtures/ (Bash unmasking)",
     prompt:
-      "Lis fixtures/clients.txt, repère l'adresse email du premier contact listé, puis utilise " +
-      "grep -F en Bash pour la rechercher littéralement dans tout le dossier fixtures/ et montre le résultat.",
+      "Read fixtures/clients.txt, find the email address of the first listed contact, then use " +
+      "grep -F in Bash to search for it literally across the whole fixtures/ folder and show the result.",
     allowedTools: "Read,Bash",
     maxTurns: 6,
     extraChecks: async (ctx) => [
       {
         ok: wasToolUsed(ctx.transcriptRaw, "Read") && wasToolUsed(ctx.transcriptRaw, "Bash"),
-        label: "outils Read + Bash utilisés",
+        label: "Read + Bash tools used",
         detail: `Read=${wasToolUsed(ctx.transcriptRaw, "Read")} Bash=${wasToolUsed(ctx.transcriptRaw, "Bash")}`,
       },
     ],
   },
   {
     id: "S6",
-    description:
-      "Cohérence inter-outils : deux lectures de clients.txt, même valeur → même placeholder",
+    description: "Cross-tool consistency: two reads of clients.txt, same value -> same placeholder",
     prompt:
-      "Lis fixtures/clients.txt avec l'outil Read. Puis relis-le une seconde fois avec un NOUVEL appel " +
-      "à l'outil Read (ne réutilise pas le résultat précédent, relance vraiment l'outil). Confirme juste " +
-      "que les deux lectures sont identiques, sans autre commentaire.",
+      "Read fixtures/clients.txt with the Read tool. Then read it again a second time with a NEW call " +
+      "to the Read tool (don't reuse the previous result, really rerun the tool). Just confirm " +
+      "that the two reads are identical, no other comment.",
     allowedTools: "Read",
     maxTurns: 5,
     extraChecks: async (ctx) => {
       const toolCheck: CheckResult = {
         ok: wasToolUsed(ctx.transcriptRaw, "Read"),
-        label: "outil Read utilisé",
-        detail: wasToolUsed(ctx.transcriptRaw, "Read") ? "confirmé" : "aucun tool_use Read trouvé",
+        label: "Read tool used",
+        detail: wasToolUsed(ctx.transcriptRaw, "Read") ? "confirmed" : "no Read tool_use found",
       };
       if (!ctx.sessionId) {
         return [
           toolCheck,
           {
             ok: false,
-            label: "cohérence store (dédup)",
-            detail: "session_id inconnu, check impossible",
+            label: "store consistency (dedup)",
+            detail: "unknown session_id, check impossible",
           },
         ];
       }
@@ -625,14 +624,13 @@ const SCENARIOS: Scenario[] = [
   },
   {
     id: "S14",
-    description:
-      "5 appels d'outils en parallèle dans le même tour (R4 : pas de collision de placeholder)",
+    description: "5 parallel tool calls in the same turn (R4: no placeholder collision)",
     prompt:
-      "Lance en PARALLÈLE, dans le même message (5 appels d'outils séparés, pas de tours successifs) : " +
+      "Launch, in PARALLEL, in the same message (5 separate tool calls, not successive turns): " +
       '(1) Read fixtures/clients.txt, (2) Bash "cat fixtures/env.fake", ' +
       '(3) Bash "cat fixtures/clients.txt", (4) Read fixtures/env.fake, ' +
       '(5) Bash "wc -l fixtures/clients.txt fixtures/env.fake". ' +
-      "Résume ensuite en une phrase que les 5 résultats sont arrivés.",
+      "Then summarize in one sentence that the 5 results came back.",
     allowedTools: "Read,Bash",
     maxTurns: 4,
     timeoutMs: 150_000,
@@ -641,13 +639,13 @@ const SCENARIOS: Scenario[] = [
         return [
           {
             ok: false,
-            label: "intégrité store",
-            detail: "session_id inconnu, check impossible",
+            label: "store integrity",
+            detail: "unknown session_id, check impossible",
           },
           {
             ok: false,
-            label: "cohérence store (dédup)",
-            detail: "session_id inconnu, check impossible",
+            label: "store consistency (dedup)",
+            detail: "unknown session_id, check impossible",
           },
         ];
       }
@@ -660,7 +658,7 @@ const SCENARIOS: Scenario[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Exécution d'un scénario
+// Running a scenario
 // ---------------------------------------------------------------------------
 
 async function runScenario(scenario: Scenario, values: string[]): Promise<ScenarioReport> {
@@ -681,15 +679,15 @@ async function runScenario(scenario: Scenario, values: string[]): Promise<Scenar
     if (cli.timedOut) {
       checks.push({
         ok: false,
-        label: "exécution CLI",
-        detail: `timeout dépassé (${scenario.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms)`,
+        label: "CLI execution",
+        detail: `timeout exceeded (${scenario.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms)`,
       });
     }
     if (!transcriptPath || !transcriptRaw) {
       checks.push({
         ok: false,
-        label: "transcript localisé",
-        detail: `aucun transcript trouvé dans ${TRANSCRIPTS_DIR} (session_id CLI: ${cli.sessionIdFromJson ?? "absent"})`,
+        label: "transcript located",
+        detail: `no transcript found in ${TRANSCRIPTS_DIR} (CLI session_id: ${cli.sessionIdFromJson ?? "missing"})`,
       });
     } else {
       checks.push(checkZeroLeak(transcriptRaw, values, scenario.prompt));
@@ -705,7 +703,7 @@ async function runScenario(scenario: Scenario, values: string[]): Promise<Scenar
       checks.push(...(await scenario.extraChecks(ctx)));
     }
 
-    const status: ScenarioReport["status"] = checks.every((c) => c.ok) ? "VERT" : "ROUGE";
+    const status: ScenarioReport["status"] = checks.every((c) => c.ok) ? "GREEN" : "RED";
 
     return {
       id: scenario.id,
@@ -720,18 +718,18 @@ async function runScenario(scenario: Scenario, values: string[]): Promise<Scenar
       stderrExcerpt: cli.stderr.slice(0, 500),
     };
   } catch (err) {
-    // Le harnais ne doit jamais planter entièrement sur l'échec d'un scénario.
+    // The harness must never crash entirely on a scenario failure.
     return {
       id: scenario.id,
       description: scenario.description,
-      status: "ROUGE",
+      status: "RED",
       durationMs: 0,
       sessionId: null,
       transcriptPath: null,
       checks: [
         {
           ok: false,
-          label: "erreur harnais",
+          label: "harness error",
           detail: err instanceof Error ? `${err.name}: ${err.message}` : String(err),
         },
       ],
@@ -753,7 +751,7 @@ function extractSessionIdFromPath(transcriptPath: string | null): string | null 
 }
 
 // ---------------------------------------------------------------------------
-// CLI (parsing, dry-run, rapport, main)
+// CLI (parsing, dry-run, report, main)
 // ---------------------------------------------------------------------------
 
 interface CliOptions {
@@ -793,7 +791,7 @@ function printTable(reports: ScenarioReport[]): void {
   const idWidth = Math.max(...reports.map((r) => r.id.length), 4);
   const statusWidth = 6;
   console.log("");
-  console.log(`${"ID".padEnd(idWidth)}  ${"STATUT".padEnd(statusWidth)}  DESCRIPTION`);
+  console.log(`${"ID".padEnd(idWidth)}  ${"STATUS".padEnd(statusWidth)}  DESCRIPTION`);
   console.log("-".repeat(idWidth + statusWidth + 60));
   for (const r of reports) {
     console.log(`${r.id.padEnd(idWidth)}  ${r.status.padEnd(statusWidth)}  ${r.description}`);
@@ -802,7 +800,7 @@ function printTable(reports: ScenarioReport[]): void {
   for (const r of reports) {
     console.log(`## ${r.id} — ${r.status} (${r.durationMs}ms, session ${r.sessionId ?? "?"})`);
     for (const c of r.checks) {
-      console.log(`   [${c.ok ? "ok" : "KO"}] ${c.label} : ${c.detail}`);
+      console.log(`   [${c.ok ? "ok" : "fail"}] ${c.label}: ${c.detail}`);
     }
     if (r.stderrExcerpt) console.log(`   stderr: ${r.stderrExcerpt.replace(/\n/g, " ")}`);
     console.log("");
@@ -828,12 +826,12 @@ async function main(): Promise<void> {
   const scenarios = only ? SCENARIOS.filter((s) => only.has(s.id)) : SCENARIOS;
 
   if (scenarios.length === 0) {
-    console.error(`Aucun scénario ne correspond à --only (${[...(only ?? [])].join(",")}).`);
+    console.error(`No scenario matches --only (${[...(only ?? [])].join(",")}).`);
     process.exit(1);
   }
 
-  // Chargées AVANT tout (y compris --dry-run) : la garde ci-dessous en dépend
-  // et doit bloquer le démarrage, pas seulement l'exécution réelle.
+  // Loaded BEFORE anything else (including --dry-run): the guard below
+  // depends on it and must block startup, not just the actual run.
   let values: string[];
   try {
     values = await loadSensitiveValues();
@@ -845,26 +843,26 @@ async function main(): Promise<void> {
   const violations = checkPromptsAgainstSensitiveValues(scenarios, values);
   if (violations.length > 0) {
     console.error(
-      "GARDE : un ou plusieurs prompts de scénario nomment littéralement une valeur sensible " +
-        "des fixtures. C'est structurellement interdit (fait 17, PROGRESS.md : le modèle ne voit " +
-        "qu'un placeholder dans les fichiers masqués et ne peut pas le corréler avec une valeur " +
-        "nommée dans le prompt — le scénario échoue fonctionnellement en plus de fausser le check " +
-        "zéro-fuite). Désigner l'entité STRUCTURELLEMENT (« le premier client », « la deuxième " +
-        "adresse email »...).",
+      "GUARD: one or more scenario prompts literally name a fixture's " +
+        "sensitive value. This is structurally forbidden (fact 17, PROGRESS.md: " +
+        "the model only sees a placeholder in the masked files and cannot correlate " +
+        "it with a value named in the prompt: the scenario fails functionally on top " +
+        'of skewing the zero-leak check). Designate the entity STRUCTURALLY ("the ' +
+        'first client", "the second email address"...).',
     );
     for (const v of violations) {
-      console.error(`  - ${v.scenarioId} : le prompt contient "${v.value}"`);
+      console.error(`  - ${v.scenarioId}: the prompt contains "${v.value}"`);
     }
     process.exit(1);
   }
 
   if (dryRun) {
-    console.log("Mode --dry-run : aucune session claude ne sera lancée.\n");
+    console.log("--dry-run mode: no claude session will be launched.\n");
     for (const s of scenarios) {
-      console.log(`${s.id} — ${s.description}`);
+      console.log(`${s.id} - ${s.description}`);
       console.log(`  ${formatCommandForDisplay(s)}`);
       if (s.filesToRestore?.length) {
-        console.log(`  fichiers sauvegardés/restaurés : ${s.filesToRestore.join(", ")}`);
+        console.log(`  saved/restored files: ${s.filesToRestore.join(", ")}`);
       }
       console.log("");
     }
@@ -872,16 +870,16 @@ async function main(): Promise<void> {
   }
 
   if (!existsSync(TEST_PROJECT_DIR)) {
-    console.error(`Répertoire de projet de test introuvable : ${TEST_PROJECT_DIR}`);
+    console.error(`Test project directory not found: ${TEST_PROJECT_DIR}`);
     process.exit(1);
   }
 
-  console.log(`${values.length} valeurs sensibles chargées depuis ${VALUES_FILE}.`);
-  console.log(`${scenarios.length} scénario(s) à exécuter dans ${TEST_PROJECT_DIR}.\n`);
+  console.log(`${values.length} sensitive value(s) loaded from ${VALUES_FILE}.`);
+  console.log(`${scenarios.length} scenario(s) to run in ${TEST_PROJECT_DIR}.\n`);
 
   const reports: ScenarioReport[] = [];
   for (const scenario of scenarios) {
-    console.log(`→ ${scenario.id} : ${scenario.description}`);
+    console.log(`-> ${scenario.id}: ${scenario.description}`);
     const report = await runScenario(scenario, values);
     reports.push(report);
     console.log(`  ${report.status}`);
@@ -889,9 +887,9 @@ async function main(): Promise<void> {
 
   printTable(reports);
   const reportPath = await writeReport(reports);
-  console.log(`Rapport JSON écrit dans ${reportPath}`);
+  console.log(`JSON report written to ${reportPath}`);
 
-  const anyRed = reports.some((r) => r.status === "ROUGE");
+  const anyRed = reports.some((r) => r.status === "RED");
   process.exitCode = anyRed ? 1 : 0;
 }
 

@@ -1,9 +1,9 @@
 /**
- * Transformation des tool_response par outil (lot 3 phase B).
- * Contrainte prouvée en phase A : updatedToolOutput doit reproduire la FORME
- * du tool_response (validation « does not match tool's output shape ») ; on
- * transforme donc les champs texte EN PLACE, sans toucher à la structure.
- * Formes capturées le 2026-07-19 (spy.jsonl), voir PROGRESS.md.
+ * Transformation of tool_response by tool (batch 3 phase B).
+ * Constraint proven in phase A: updatedToolOutput must reproduce the SHAPE
+ * of the tool_response ("does not match tool's output shape" validation);
+ * text fields are therefore transformed IN PLACE, without touching the
+ * structure. Shapes captured on 2026-07-19 (spy.jsonl), see PROGRESS.md.
  */
 
 type TransformFn = (text: string) => Promise<string>;
@@ -13,7 +13,7 @@ interface TransformResult {
   touched: boolean;
 }
 
-/** Champs porteurs de texte par outil connu (chemins depuis la racine du tool_response). */
+/** Text-bearing fields per known tool (paths from the tool_response root). */
 const KNOWN_TEXT_PATHS: Record<string, string[][]> = {
   Read: [["file", "content"]],
   Bash: [["stdout"], ["stderr"]],
@@ -49,13 +49,13 @@ async function transformAtPath(
 }
 
 /**
- * En mode générique, une feuille plus courte ne peut pas porter une PII ou un
- * secret exploitable (emails, téléphones, IBAN, clés font tous 6+ caractères) :
- * on évite un appel de masquage par micro-champ ("type": "text", "mode"...).
+ * In generic mode, a shorter leaf cannot carry an exploitable PII or secret
+ * (emails, phone numbers, IBANs, keys are all 6+ characters): this avoids a
+ * masking call per micro-field ("type": "text", "mode"...).
  */
 const MIN_DEEP_LEAF_LENGTH = 6;
 
-/** Parcours générique : transforme les feuilles string (outils inconnus, MCP). */
+/** Generic traversal: transforms string leaves (unknown tools, MCP). */
 async function transformDeep(
   value: unknown,
   fn: TransformFn,
@@ -89,16 +89,16 @@ async function transformDeep(
 }
 
 /**
- * Applique fn à chaque champ texte du tool_response, en préservant la forme.
- * Outil connu : champs ciblés. Outil inconnu (dont MCP) : toutes les feuilles
- * string. Agent/Task : les items text de content[].
+ * Applies fn to each text field of the tool_response, preserving the shape.
+ * Known tool: targeted fields. Unknown tool (including MCP): all string
+ * leaves. Agent/Task: the text items of content[].
  */
 export async function transformToolResponse(
   toolName: string,
   toolResponse: unknown,
   fn: TransformFn,
 ): Promise<TransformResult> {
-  // Sortie string brute (certains outils/MCP) : transformer directement.
+  // Raw string output (some tools/MCP): transform directly.
   if (typeof toolResponse === "string") {
     return toolResponse.length > 0
       ? { response: await fn(toolResponse), touched: true }
@@ -140,7 +140,7 @@ export async function transformToolResponse(
   return { response: deep.value, touched: deep.touched };
 }
 
-/** Longueur totale du texte qui sera soumis au masquage (pour le plafond de taille). */
+/** Total length of the text that will be submitted for masking (for the size cap). */
 export async function totalTextLength(toolName: string, toolResponse: unknown): Promise<number> {
   let total = 0;
   await transformToolResponse(toolName, toolResponse, async (text) => {

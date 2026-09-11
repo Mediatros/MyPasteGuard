@@ -1,10 +1,11 @@
 /**
- * POC V2 (lot 4, jetable) : teste si `updatedInput` de PreToolUse est honoré
- * par claude 2.1.215, par outil et par mode de permissionDecision.
- * Remplace [[POC_1]] par POCVALUE_RESTORED dans toutes les feuilles string de
- * tool_input, émet updatedInput selon le mode (argv[2] : plain | defer | ask |
- * allow), et logge payload + sortie dans ~/.pasteguard/poc-v2.jsonl.
- * Ne jamais brancher hors du projet de test.
+ * POC V2 (batch 4, throwaway): tests whether PreToolUse's `updatedInput` is
+ * honored by claude 2.1.215, per tool and per permissionDecision mode.
+ * Replaces [[POC_1]] with POCVALUE_RESTORED in every string leaf of
+ * tool_input, emits updatedInput according to the mode (argv[2]: plain |
+ * defer | ask | allow), and logs payload + output to
+ * ~/.pasteguard/poc-v2.jsonl.
+ * Never wire this outside the test project.
  */
 import { appendFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
