@@ -1,7 +1,7 @@
 ---
 title: Coding Agents
 sidebarTitle: Coding Agents
-description: Protect codebase context, logs, tickets, and secrets in Codex, Claude Code, and other coding agents
+description: Protect codebase context, logs, tickets, and secrets in Codex, Claude Code, OpenCode, DeepSeek Harness, and other coding agents
 ---
 
 Coding agents often receive more than code. They see logs, stack traces, support tickets, config snippets, test fixtures, environment examples, and production context.
@@ -54,6 +54,67 @@ To make it permanent, add to your shell profile:
 export ANTHROPIC_BASE_URL=http://localhost:3000/anthropic
 ```
 
+<Note>
+This requires Claude Code to authenticate with an Anthropic API key. Claude Code signed in with a Claude.ai subscription (OAuth) cannot use a proxy: requests fail with `401`, and subscription credentials are meant for Claude Code's own client flow only. For subscription users, this fork provides a hooks-based integration that masks tool outputs before they enter the context and restores placeholders locally, without touching authentication: see [`integrations/claude-code/`](https://github.com/Mediatros/pasteguard/tree/main/integrations/claude-code).
+</Note>
+
+## OpenCode
+
+Set the provider's base URL in `opencode.json` (in the project, or in `~/.config/opencode/opencode.json`). Tested with the DeepSeek provider; other providers use the same key:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "deepseek": {
+      "options": {
+        "baseURL": "http://localhost:3000/openai/v1"
+      }
+    }
+  }
+}
+```
+
+For OpenAI, use `provider.openai.options.baseURL` with `http://localhost:3000/openai/v1`; for Anthropic, `provider.anthropic.options.baseURL` with `http://localhost:3000/anthropic/v1`. Then run a smoke test:
+
+```bash
+opencode run -m deepseek/deepseek-chat 'Reply with exactly: ok'
+```
+
+<Note>
+Use API keys with OpenCode behind PasteGuard. OpenCode's Claude Pro/Max login option relies on subscription OAuth credentials, which cannot go through a proxy (see Claude Code above).
+</Note>
+
+## DeepSeek Harness
+
+[DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`) talks to the DeepSeek API over the OpenAI-compatible chat completions protocol. Point PasteGuard's OpenAI provider at DeepSeek in `config.yaml`:
+
+```yaml
+providers:
+  openai:
+    base_url: https://api.deepseek.com/v1
+```
+
+Then point `dsh` at PasteGuard with its base URL variable:
+
+```bash
+DEEPSEEK_BASE_URL=http://localhost:3000/openai/v1 dsh web
+```
+
+Smoke test without the web UI:
+
+```bash
+DEEPSEEK_BASE_URL=http://localhost:3000/openai/v1 dsh --profile headless 'Reply with exactly: ok'
+```
+
+Requests appear in the dashboard with the `deepseek-harness` user agent, including the session-title request `dsh` sends alongside each conversation.
+
+<Note>
+- PasteGuard has a single OpenAI-compatible upstream. While `providers.openai.base_url` points at DeepSeek, every client of `/openai/v1` reaches DeepSeek.
+- Keep the `dsh_session_log` extension disabled (its default). When enabled, `dsh` sends the raw session log (user messages, tool results, working directory) as a top-level request field outside `messages`, which PasteGuard does not scan.
+- `dsh` Files API uploads (images) are not proxied.
+</Note>
+
 ## Cursor
 
 1. Open **Settings** -> **Models**
@@ -78,6 +139,6 @@ export ANTHROPIC_BASE_URL=http://localhost:3000/anthropic
 
 | Target | PasteGuard URL |
 |----------|----------------|
-| OpenAI-compatible agents | `http://localhost:3000/openai/v1` |
+| OpenAI-compatible agents (OpenCode, DeepSeek Harness) | `http://localhost:3000/openai/v1` |
 | Anthropic-compatible agents | `http://localhost:3000/anthropic` |
 | Codex CLI | `http://localhost:3000/codex` |
