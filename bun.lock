@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "pasteguard",
+      "name": "mypasteguard",
       "dependencies": {
         "@hono/zod-validator": "^0.7.6",
         "hono": "^4.12.23",

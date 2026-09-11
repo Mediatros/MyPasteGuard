@@ -24,6 +24,10 @@
   <a href="https://pasteguard.com/docs"><strong>Documentation</strong></a>
 </p>
 
+<p align="center">
+  <em>MyPasteGuard is a personal fork of <a href="https://github.com/sgasser/pasteguard">sgasser/pasteguard</a>, adapted to our own use cases. See <a href="#about-this-fork">About This Fork</a>.</em>
+</p>
+
 <br/>
 
 <picture>
@@ -61,9 +65,11 @@ Change one base URL. PasteGuard masks the request, forwards it to the configured
 
 ### Coding Agents
 
-**Codex, Claude Code, Cursor, Windsurf, Copilot, and other coding agents.** Agent prompts often include logs, stack traces, tickets, config files, test fixtures, and codebase context. PasteGuard masks secrets and PII before that context leaves your machine.
+**Codex, Claude Code, OpenCode, DeepSeek Harness, Cursor, Windsurf, Copilot, and other coding agents.** Agent prompts often include logs, stack traces, tickets, config files, test fixtures, and codebase context. PasteGuard masks secrets and PII before that context leaves your machine.
 
-**[Coding Agents docs](https://pasteguard.com/docs/use-cases/coding-tools)**
+Claude Code signed in with a Claude.ai subscription cannot use a proxy; this fork covers that case with a hooks integration, see [`integrations/claude-code/`](integrations/claude-code/README.md).
+
+**[Coding Agents docs](docs/use-cases/coding-tools.mdx)**
 
 ## Built For Strict Privacy Rules
 
@@ -147,6 +153,18 @@ Code, Docker image, and tests are in [`detector/`](detector/).
 ## Tech Stack
 
 [Bun](https://bun.sh) · [Hono](https://hono.dev) · [GLiNER](https://github.com/urchade/GLiNER) + [python-stdnum](https://arthurdejong.org/python-stdnum/) ([`detector/`](detector/)) · SQLite or Postgres
+
+## About This Fork
+
+MyPasteGuard is a personal fork of [sgasser/pasteguard](https://github.com/sgasser/pasteguard), maintained by [Mediatros](https://github.com/Mediatros). The upstream project remains the reference; this fork tracks it and resynchronises with it regularly.
+
+The changes made here serve our own use cases and are not meant to be general-purpose:
+
+- **Claude Code with a Claude.ai subscription.** The proxy approach requires an API key, so [`integrations/claude-code/`](integrations/claude-code/README.md) adds a hooks-based integration: tool outputs are masked before they enter the context, and placeholders are restored locally in written files and on screen. Authentication is left untouched. Its security model, with each claim labelled as measured, established or not verified, is documented in [`SECURITY.md`](integrations/claude-code/SECURITY.md).
+- **The coding agents we use.** Verified setups for [OpenCode and DeepSeek Harness](docs/use-cases/coding-tools.mdx), with DeepSeek reached through the OpenAI-compatible route.
+- **Detection tuned for our data.** French phone numbers and a lower `PERSON` confidence floor for dense, mixed-format documents.
+
+Engine fixes that benefit everyone are proposed upstream. Everything else stays in this fork. Unless a section says otherwise, the documentation under `docs/` describes upstream behaviour, and the hosted docs at pasteguard.com are upstream's.
 
 ## Contributing
 

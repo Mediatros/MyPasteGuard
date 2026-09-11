@@ -40,6 +40,8 @@ Primary endpoints:
 - Update README and docs when public endpoints, provider config, or user setup steps change.
 - Do not commit tracked `config.yaml` changes.
 - Do not create commits or push branches unless the user explicitly asks.
+- Commits, pull requests and releases are authored by Mediatros only: no `Co-Authored-By` trailers and no tool or assistant attribution.
+- This fork (MyPasteGuard) is public: write all committed content (code, comments, docs, commit messages) in English.
 
 ## Architecture Pointers
 
