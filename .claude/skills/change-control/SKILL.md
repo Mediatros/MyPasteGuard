@@ -12,7 +12,7 @@ description: How changes are classified, managed, and delivered in this PasteGua
 
 ## Fork state (surveyed on 2026-07-07, re-verify before acting)
 
-- `origin` = https://github.com/Mediatros/pasteguard.git (JB's fork); `upstream` = https://github.com/sgasser/pasteguard.git. [verified: executed]
+- `origin` = https://github.com/Mediatros/MyPasteGuard.git (JB's fork); `upstream` = https://github.com/sgasser/pasteguard.git. [verified: executed]
 - 144 commits, latest `547e7c3` (Bump version to 0.7.5, 2026-07-03). Version 0.7.5, tag `v0.7.5`. [verified: executed]
 - Current branch `fix/claude-code-transparency`: NO commits ahead of `main` — all the work lives in the UNCOMMITTED working tree: 9 files modified (652+/109-) under `src/masking/`, `src/providers/anthropic/`, `src/routes/anthropic*`, plus untracked `src/providers/anthropic/client.test.ts`. [verified: executed git status/diff]
 - These changes are intended for a future upstream PR (issue #139): do not discard them, do not commit them without being asked. Full context: skill `failure-archaeology`.
