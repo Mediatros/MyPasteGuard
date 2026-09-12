@@ -161,8 +161,21 @@ MyPasteGuard is a personal fork of [sgasser/pasteguard](https://github.com/sgass
 The changes made here serve our own use cases and are not meant to be general-purpose:
 
 - **Claude Code with a Claude.ai subscription.** The proxy approach requires an API key, so [`integrations/claude-code/`](integrations/claude-code/README.md) adds a hooks-based integration: tool outputs are masked before they enter the context, and placeholders are restored locally in written files and on screen. Authentication is left untouched. Its security model, with each claim labelled as measured, established or not verified, is documented in [`SECURITY.md`](integrations/claude-code/SECURITY.md).
-- **The coding agents we use.** Verified setups for [OpenCode and DeepSeek Harness](docs/use-cases/coding-tools.mdx), with DeepSeek reached through the OpenAI-compatible route.
+- **The coding agents we use.** Setups for OpenCode and DeepSeek Harness, with DeepSeek reached through the OpenAI-compatible route. Tested status in the table below.
 - **Detection tuned for our data.** French phone numbers and a lower `PERSON` confidence floor for dense, mixed-format documents.
+
+### Agents We Tested Ourselves
+
+What we actually ran against this fork, with synthetic data, and what we did not. Setup instructions for every agent below are in the [coding agents docs](docs/use-cases/coding-tools.mdx).
+
+| Agent | Status | What we saw |
+|---|---|---|
+| Claude Code, Claude.ai subscription (hooks) | Verified end-to-end | Masked before the context, restored locally, zero sensitive value in 119 intercepted requests. Details and limits in [`SECURITY.md`](integrations/claude-code/SECURITY.md) |
+| [OpenCode](https://opencode.ai) 1.18.15 (DeepSeek provider) | Verified | One `baseURL` change, masking visible in the dashboard, values restored in responses |
+| [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 0.1.5-rc | Verified, with caveats | Chat and session-title requests both masked. PasteGuard has a single OpenAI-compatible upstream, and the optional `dsh_session_log` extension sends data we do not scan |
+| Claude Code with an API key, Codex CLI, Cursor, other OpenAI- or Anthropic-compatible agents | Not tested here | Upstream setups, unchanged by this fork |
+
+Last checked on 2026-09-11, against `claude` 2.1.215.
 
 Engine fixes that benefit everyone are proposed upstream. Everything else stays in this fork. Unless a section says otherwise, the documentation under `docs/` describes upstream behaviour, and the hosted docs at pasteguard.com are upstream's.
 
